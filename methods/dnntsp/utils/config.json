@@ -6,7 +6,7 @@
     "keyset_path": "../../../keyset/tafeng_keyset_0.json",
     "item_embed_dim": 32,
     "items_total": 13897,
-    "cuda": 0,
+    "cuda": -1,
     "loss_function": "multi_label_soft_loss",
     "epochs": 1,
     "batch_size": 64,
