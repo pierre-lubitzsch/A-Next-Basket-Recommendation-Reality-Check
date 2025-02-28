@@ -1,6 +1,6 @@
 import json
 from collections import defaultdict
-import dgl
+# import dgl
 import torch
 from torch.utils.data import Dataset, DataLoader
 import itertools
@@ -11,6 +11,7 @@ sys.path.append("..")
 from utils.util import convert_to_gpu
 from utils.util import get_truth_data
 from utils.load_config import get_attribute
+from torch_geometric.data import Data, Batch
 
 
 class SetDataset(Dataset):
@@ -73,9 +74,9 @@ class SetDataset(Dataset):
         # construct fully connected graph, containing N nodes, unweighted
         # (0, 0), (0, 1), ..., (0, N-1), (1, 0), (1, 1), ..., (1, N-1), ...
         # src -> [0, 0, 0, ... N-1, N-1, N-1, ...],  dst -> [0, 1, ..., N-1, ..., 0, 1, ..., N-1]
-        src = torch.stack([project_nodes for _ in range(project_nodes.shape[0])], dim=1).flatten().tolist()
-        dst = torch.stack([project_nodes for _ in range(project_nodes.shape[0])], dim=0).flatten().tolist()
-        g = dgl.graph((src, dst), num_nodes=project_nodes.shape[0])
+        src = torch.stack([project_nodes for _ in range(project_nodes.shape[0])], dim=1).flatten()
+        dst = torch.stack([project_nodes for _ in range(project_nodes.shape[0])], dim=0).flatten()
+        # g = dgl.graph((src, dst), num_nodes=project_nodes.shape[0])
         edges_weight_dict = self.get_edges_weight(user_data[:-1])
         # add self-loop
         for node in nodes.tolist():
@@ -85,6 +86,12 @@ class SetDataset(Dataset):
         max_weight = max(edges_weight_dict.values())
         for i, j in edges_weight_dict.items():
             edges_weight_dict[i] = j / max_weight
+        
+        # edge index for PyG
+        edge_index = torch.stack([src, dst], dim=0).long()
+
+        pyg_data = Data(x=nodes_feature, edge_index=edge_index)
+
         # get edge weight for each timestamp, shape (T, N*N)
         # print(edges_weight_dict)
         edges_weight = []
@@ -102,7 +109,7 @@ class SetDataset(Dataset):
             edges_weight.append(torch.Tensor(edge_weight))
         # tensor -> shape (T, N*N)
         edges_weight = torch.stack(edges_weight)
-        return g, nodes_feature, edges_weight, nodes, user_data
+        return pyg_data, nodes_feature, edges_weight, nodes, user_data
 
     def __len__(self):
         return len(self.data_list)
@@ -151,8 +158,8 @@ def collate_set_across_user(batch_data):
     ret = list()
     for idx, item in enumerate(zip(*batch_data)):
         # assert type(item) == tuple
-        if isinstance(item[0], dgl.DGLGraph):
-            ret.append(dgl.batch(item))
+        if isinstance(item[0], Data):
+            ret.append(Batch.from_data_list(list(item)))
         elif isinstance(item[0], torch.Tensor):
             if idx == 2:
                 # pad edges_weight sequence in time dimension batch, (T, N*N)

@@ -1,47 +1,90 @@
 from typing import List
 import torch.nn as nn
 import torch
-import dgl
-import dgl.function as fn
+# import dgl
+# import dgl.function as fn
+from torch_geometric.nn import MessagePassing
+from torch_geometric.utils import scatter
 
 
-class weighted_graph_conv(nn.Module):
+class weighted_graph_conv(MessagePassing):
     """
         Apply graph convolution over an input signal.
     """
     def __init__(self, in_features: int, out_features: int):
-        super(weighted_graph_conv, self).__init__()
+        super(weighted_graph_conv, self).__init__(aggr="sum")
         self.in_features = in_features
         self.out_features = out_features
         self.linear = nn.Linear(in_features, out_features, bias=True)
 
+
     def forward(self, graph, node_features, edge_weights):
-        r"""Compute weighted graph convolution.
-        -----
-        Input:
-        graph : DGLGraph, batched graph.
-        node_features : torch.Tensor, input features for nodes (n_1+n_2+..., in_features) or (n_1+n_2+..., T, in_features)
-        edge_weights : torch.Tensor, input weights for edges  (T, n_1^2+n_2^2+..., n^2)
-
-        Output:
-        shape: (N, T, out_features)
         """
-        graph = graph.local_var()
-        # multi W first to project the features, with bias
-        # (N, F) / (N, T, F)
-        graph.ndata['n'] = node_features
-        # edge_weights, shape (T, N^2)
-        # one way: use dgl.function is faster and less requirement of GPU memory
-        graph.edata['e'] = edge_weights.t().unsqueeze(dim=-1)  # (E, T, 1)
-        graph.update_all(fn.u_mul_e('n', 'e', 'msg'), fn.sum('msg', 'h'))
+        :param graph: (Replaced) Expecting edge_index tensor instead of DGLGraph
+        :param node_features: Tensor of shape (N, in_features) or (N, T, in_features)
+        :param edge_weights: Tensor of shape (num_edges,) or (T, num_edges)
+        :return: Transformed node features of shape (N, T, out_features)
+        """
+        edge_index = graph  # Treat graph as edge_index in PyG
+        return self.propagate(edge_index, x=node_features, edge_weight=edge_weights)
 
-        # another way: use user defined function, needs more GPU memory
-        # graph.edata['e'] = edge_weights.t()
-        # graph.update_all(self.gcn_message, self.gcn_reduce)
+    def message(self, x_j, edge_weight):
+        """
+        Equivalent to fn.u_mul_e('n', 'e', 'msg') in DGL.
+        - x_j: Feature of source node (neighbor)
+        - edge_weight: Feature of edge
+        """
+        if edge_weight.dim() == 2:  # If edge weights have a time dimension
+            # (num_edges, T, in_features)
+            return edge_weight.unsqueeze(-1) * x_j
+        else:
+            return edge_weight.view(-1, 1) * x_j  # (num_edges, in_features)
 
-        node_features = graph.ndata.pop('h')
-        output = self.linear(node_features)
-        return output
+    def aggregate(self, inputs, index):
+        """
+        Equivalent to fn.sum('msg', 'h') in DGL.
+        - inputs: Aggregated messages from neighbors
+        - index: Target node indices
+        """
+        # if we have multiple heads the heads are at dim 0 and the neighbors at dim 1, otherwise the neighbors are at dim 0
+        dim = int(inputs.ndim == 3)
+        return scatter(inputs, index, dim=dim, reduce='sum')  # Sum over neighbors
+
+    def update(self, aggr_out):
+        """
+        Optional: Apply linear transformation.
+        """
+        return self.linear(aggr_out)
+
+
+    # dgl way for forward
+    # def forward(self, graph, node_features, edge_weights):
+    #     r"""Compute weighted graph convolution.
+    #     -----
+    #     Input:
+    #     graph : DGLGraph, batched graph.
+    #     node_features : torch.Tensor, input features for nodes (n_1+n_2+..., in_features) or (n_1+n_2+..., T, in_features)
+    #     edge_weights : torch.Tensor, input weights for edges  (T, n_1^2+n_2^2+..., n^2)
+
+    #     Output:
+    #     shape: (N, T, out_features)
+    #     """
+    #     graph = graph.local_var()
+    #     # multi W first to project the features, with bias
+    #     # (N, F) / (N, T, F)
+    #     graph.ndata['n'] = node_features
+    #     # edge_weights, shape (T, N^2)
+    #     # one way: use dgl.function is faster and less requirement of GPU memory
+    #     graph.edata['e'] = edge_weights.t().unsqueeze(dim=-1)  # (E, T, 1)
+    #     graph.update_all(fn.u_mul_e('n', 'e', 'msg'), fn.sum('msg', 'h'))
+
+    #     # another way: use user defined function, needs more GPU memory
+    #     # graph.edata['e'] = edge_weights.t()
+    #     # graph.update_all(self.gcn_message, self.gcn_reduce)
+
+    #     node_features = graph.ndata.pop('h')
+    #     output = self.linear(node_features)
+    #     return output
 
     @staticmethod
     def gcn_message(edges):
@@ -80,7 +123,7 @@ class weighted_GCN(nn.Module):
         bns.append(nn.BatchNorm1d(out_features))
         self.gcns, self.relus, self.bns = gcns, relus, bns
 
-    def forward(self, graph: dgl.DGLGraph, node_features: torch.Tensor, edges_weight: torch.Tensor):
+    def forward(self, graph, node_features: torch.Tensor, edges_weight: torch.Tensor):
         """
         :param graph: a graph
         :param node_features: shape (n_1+n_2+..., n_features)

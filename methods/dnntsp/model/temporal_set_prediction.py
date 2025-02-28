@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-import dgl
+# import dgl
 import sys
 sys.path.append("..")
 
@@ -41,7 +41,7 @@ class temporal_set_prediction(nn.Module):
 
         self.fc_output = nn.Linear(item_embedding_dim, 1)
 
-    def forward(self, graph: dgl.DGLGraph, nodes_feature: torch.Tensor, edges_weight: torch.Tensor,
+    def forward(self, graph, nodes_feature: torch.Tensor, edges_weight: torch.Tensor,
                 lengths: torch.Tensor, nodes: torch.Tensor, users_frequency: torch.Tensor):
         """
 
@@ -55,7 +55,7 @@ class temporal_set_prediction(nn.Module):
         :return:
         """
         # perform weighted gcn on dynamic graphs (n_1+n_2+..., T_max, item_embed_dim)
-        nodes_output = self.stacked_gcn(graph, nodes_feature, edges_weight)
+        nodes_output = self.stacked_gcn(graph.edge_index, nodes_feature, edges_weight)
 
         # self-attention in time dimension, (n_1+n_2+..., T_max,  item_embed_dim)
         nodes_output = self.masked_self_attention(nodes_output)

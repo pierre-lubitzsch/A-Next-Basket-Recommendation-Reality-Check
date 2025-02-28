@@ -20,20 +20,45 @@ class aggregate_nodes_temporal_feature(nn.Module):
         :param nodes_output: the output of self-attention model in time dimension, (n_1+n_2+..., T_max, F)
         :return: aggregated_features, (n_1+n_2+..., F)
         """
-        nums_nodes, id = graph.batch_num_nodes(), 0
+
+        num_nodes_per_graph = graph.ptr[1:] - graph.ptr[:-1]  # Equivalent to batch_num_nodes()
+
         aggregated_features = []
-        for num_nodes, length in zip(nums_nodes, lengths):
-            # get each user's length, tensor, shape, (user_nodes, user_length, item_embed_dim)
-            output_node_features = nodes_output[id:id + num_nodes, :length, :]
-            # weights for each timestamp, tensor, shape, (user_nodes, 1, user_length)
-            # (user_nodes, user_length, 1) transpose to -> (user_nodes, 1, user_length)
+        start_idx = 0
+
+        for num_nodes, length in zip(num_nodes_per_graph, lengths):
+            # Get node feature slice, transpose to get the data in the same shape as we would have with dgl
+            output_node_features = nodes_output[:length, start_idx : start_idx + num_nodes, :].transpose(0, 1)
+            
+            # Compute weights (user_nodes, 1, user_length)
             weights = self.Wq(output_node_features).transpose(1, 2)
-            # (user_nodes, 1, user_length) matmul (user_nodes, user_length, item_embed_dim)
-            # -> (user_nodes, 1, item_embed_dim) squeeze to (user_nodes, item_embed_dim)
-            # aggregated_feature, tensor, shape, (user_nodes, item_embed_dim)
+
+            # Weighted aggregation (user_nodes, 1, item_embed_dim) -> (user_nodes, item_embed_dim)
             aggregated_feature = weights.matmul(output_node_features).squeeze(dim=1)
+
             aggregated_features.append(aggregated_feature)
-            id += num_nodes
-        # (n_1+n_2+..., item_embed_dim)
+            start_idx += num_nodes
+
+        # Concatenate results from all graphs (num_total_users, item_embed_dim)
         aggregated_features = torch.cat(aggregated_features, dim=0)
+
         return aggregated_features
+
+        # dgl way
+        # nums_nodes, id = graph.batch_num_nodes(), 0
+        # aggregated_features = []
+        # for num_nodes, length in zip(nums_nodes, lengths):
+        #     # get each user's length, tensor, shape, (user_nodes, user_length, item_embed_dim)
+        #     output_node_features = nodes_output[id:id + num_nodes, :length, :]
+        #     # weights for each timestamp, tensor, shape, (user_nodes, 1, user_length)
+        #     # (user_nodes, user_length, 1) transpose to -> (user_nodes, 1, user_length)
+        #     weights = self.Wq(output_node_features).transpose(1, 2)
+        #     # (user_nodes, 1, user_length) matmul (user_nodes, user_length, item_embed_dim)
+        #     # -> (user_nodes, 1, item_embed_dim) squeeze to (user_nodes, item_embed_dim)
+        #     # aggregated_feature, tensor, shape, (user_nodes, item_embed_dim)
+        #     aggregated_feature = weights.matmul(output_node_features).squeeze(dim=1)
+        #     aggregated_features.append(aggregated_feature)
+        #     id += num_nodes
+        # # (n_1+n_2+..., item_embed_dim)
+        # aggregated_features = torch.cat(aggregated_features, dim=0)
+        # return aggregated_features
