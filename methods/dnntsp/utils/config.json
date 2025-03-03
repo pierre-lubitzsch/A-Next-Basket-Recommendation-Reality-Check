@@ -8,7 +8,7 @@
     "items_total": 13897,
     "cuda": 0,
     "loss_function": "multi_label_soft_loss",
-    "epochs": 1,
+    "epochs": 40,
     "batch_size": 64,
     "learning_rate": 0.001,
     "optim": "Adam",
