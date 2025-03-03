@@ -56,8 +56,8 @@ def train():
     loss_func = create_loss(loss_type=get_attribute('loss_function'))
 
     # 训练
-    model_folder = f"../save_model_folder/{get_attribute('data')}/{get_attribute('save_model_folder')}"
-    tensorboard_folder = f"../runs/{get_attribute('data')}/{get_attribute('save_model_folder')}"
+    model_folder = f"/opt/results/save_model_folder/{get_attribute('data')}/{get_attribute('save_model_folder')}"
+    tensorboard_folder = f"/opt/results/runs/{get_attribute('data')}/{get_attribute('save_model_folder')}"
 
     shutil.rmtree(model_folder, ignore_errors=True)
     os.makedirs(model_folder, exist_ok=True)
