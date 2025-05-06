@@ -1,3 +1,11 @@
+import sys
+
+sys.path.append("..")
+DEBUG = False
+if DEBUG:
+    sys.path.append("./methods/dnntsp")
+    sys.path.append("./methods/dnntsp/train")
+
 from train_model import train_model
 from model.temporal_set_prediction import temporal_set_prediction
 from utils.util import get_class_weights
@@ -6,11 +14,9 @@ from utils.data_container import get_data_loader
 from utils.load_config import get_attribute
 import torch
 import torch.nn as nn
-import sys
 import os
 import shutil
 import argparse
-sys.path.append("..")
 
 
 def parse_args():

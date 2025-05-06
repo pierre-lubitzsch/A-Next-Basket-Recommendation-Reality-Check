@@ -22,7 +22,7 @@ def get_repeat_eval(pred_folder, dataset, size, fold_list, file):
 
     for ind in fold_list:
         keyset_file = f'../keyset/{dataset}_keyset_{ind}.json'
-        pred_file = f'{pred_folder}/{dataset}_pred{ind}.json'
+        pred_file = f'{pred_folder}/{dataset}_pred{ind}_100_epochs.json'
         with open(keyset_file, 'r') as f:
             keyset = json.load(f)
         with open(pred_file, 'r') as f:
@@ -101,9 +101,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     pred_folder = args.pred_folder
     fold_list = args.fold_list
-    eval_file = 'eval_results.txt'
+    eval_file = 'eval_results_dnntsp_100_epochs.txt'
     f = open(eval_file, 'w')
-    for dataset in ['dunnhumby', 'tafeng', 'instacart']:
+    for dataset in ["tafeng"]:#['dunnhumby', 'tafeng', 'instacart']:
         f.write('############'+dataset+'########### \n')
         get_repeat_eval(pred_folder, dataset, 10, fold_list, f)
         get_repeat_eval(pred_folder, dataset, 20, fold_list, f)

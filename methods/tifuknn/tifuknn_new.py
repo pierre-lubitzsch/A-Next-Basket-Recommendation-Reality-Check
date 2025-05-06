@@ -6,6 +6,7 @@ import csv
 
 import os
 import json
+import joblib
 
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
@@ -94,6 +95,12 @@ def KNN(query_set, target_set, k):
         test_mat.append(query_set[key])
     # print('Finding k nearest neighbors...')
     nbrs = NearestNeighbors(n_neighbors=k, algorithm='brute').fit(history_mat)
+    # save model
+    keyset_idx = sys.argv[3].split("_")[-1]
+    keyset_idx = keyset_idx[: keyset_idx.find(".json")]
+    dataset_name = sys.argv[3].split("/")[-1].split("_")[0]
+    joblib.dump(nbrs, f"{dataset_name}_model{keyset_idx}.joblib")
+    # load nbrs with: nbrs = joblib.load(f"{dataset_name}_model{keyset_idx}.joblib")
     distances, indices = nbrs.kneighbors(test_mat)
     # print('Finish KNN search.' )
     return indices, distances

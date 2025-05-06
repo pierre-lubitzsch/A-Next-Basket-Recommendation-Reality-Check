@@ -8,6 +8,7 @@ from scipy import sparse
 # import similaripy as sim
 import os
 from similarity import *
+import joblib
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -123,6 +124,14 @@ if __name__ == '__main__':
     # user_reccomendation = sim.dot_product(usersim.power(q), sparse.csr_matrix(rc_matrix), k=topk)
     # user_reccomendation = sparse.csr_matrix(rc_matrix).toarray()
 
+    # save model
+    model = {
+        "usersim": usersim,
+        "user_recommendation": user_reccomendation,
+        "params": args
+    }
+    joblib.dump(model, os.path.join('./models', f'{dataset}_model{foldk}.joblib'))
+
     #prediction
     # if not os.path.exist('pred/'):
     #     os.mkdir('pred/')
@@ -142,7 +151,7 @@ if __name__ == '__main__':
         # o_pred_list = [rev_item_map_dict[item] for item in pred_list]
 
         pred_dict[uid] = [int(i) for i in pred_list]
-        print(list(pred_list))
+        #print(list(pred_list))
     with open(pred_path, 'w') as f:
         json.dump(pred_dict, f)
 
