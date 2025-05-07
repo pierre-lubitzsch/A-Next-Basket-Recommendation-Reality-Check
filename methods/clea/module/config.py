@@ -52,6 +52,8 @@ parser.add_argument('--before_epoch', type=int, default=0, help='basket_group_sp
 parser.add_argument('--clip_value', type=float, default=0.1, help='dropout')
 parser.add_argument('--to2', type=int, default= 0, help='n_users TaFeng:16060 Instacart:6885 Delicious:1735')
 
+parser.add_argument('--seed', type=int, default=2, help='random seed')
+
 args = parser.parse_args()
 
 
@@ -129,7 +131,9 @@ class Config(object):
         self.before_epoch = args.before_epoch  
 
         self.G1_flag = args.G1_flag
-        self.histroy = args.history  
+        self.histroy = args.history
+
+        self.seed = args.seed
 
     def list_all_member(self, logger):
         for name, value in vars(self).items():

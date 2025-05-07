@@ -19,6 +19,17 @@ import shutil
 import argparse
 
 
+def set_seed(seed: int) -> None:
+    torch.manual_seed(seed)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Training script arguments')
     parser.add_argument('--save_model_folder', type=str, default='DNNTSP', help='Folder to save the model')
@@ -34,6 +45,7 @@ def parse_args():
     parser.add_argument('--weight_decay', type=float, default=0, help='Weight decay (L2 penalty)')
     parser.add_argument('--data_path', type=str, default='../../../jsondata/tafeng_history.json', help='Data path for class weights')
     parser.add_argument('--LOCAL', action='store_true', help='Set this flag to run locally')
+    parser.add_argument('--seed', type=int, default=2, help='random seed')
     return parser.parse_args()
 
 
@@ -114,6 +126,7 @@ def train(save_model_folder, history_path, future_path, keyset_path, item_embed_
 
 if __name__ == '__main__':
     args = parse_args()
+    set_seed(args.seed)
     train(save_model_folder=args.save_model_folder,
           history_path=args.history_path,
           future_path=args.future_path,

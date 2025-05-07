@@ -312,7 +312,7 @@ def timeSince(since, percent):
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 def trainIters(data_history, data_future, output_size, encoder, decoder, model_name, training_key_set, val_keyset, codes_inverse_freq, next_k_step,
-               n_iters, top_k):
+               n_iters, top_k, seed):
     start = time.time()
     print_loss_total = 0  # Reset every print_every
     # elem_wise_connection.initWeight()
@@ -357,12 +357,15 @@ def trainIters(data_history, data_future, output_size, encoder, decoder, model_n
         if recall>best_recall:
             best_recall=recall
             # print(pred_dict[user])
-            filepath = './models/encoder_' + (model_name) + '_model_best'
+            filepath = './models/encoder_' + (model_name) + f'_model_best_seed_{seed}'
             torch.save(encoder, filepath)
-            filepath = './models/decoder_' + (model_name) + '_model_best'
+            filepath = './models/decoder_' + (model_name) + f'_model_best_seed_{seed}'
             torch.save(decoder, filepath)
             print('Recall:', recall)
         print('Finish epoch: ' + str(j))
+        # save every epoch, as evaluation uses this
+        torch.save(encoder, f'./models/encoder_{model_name}_model_epoch{j}_seed_{seed}')
+        torch.save(decoder, f'./models/decoder_{model_name}_model_epoch{j}_seed_{seed}')
         print('Model is saved.')
 ######################################################################
 # Plotting results
@@ -618,10 +621,8 @@ def evaluate(history_data, future_data, encoder, decoder, output_size, test_key_
             F.append(Fscore)
             if idx == 0:
                 prec1.append(precision)
-                rec1.append(recall)
-                F1.append(Fscore)
-            elif idx == 1:
-                prec2.append(precision)
+                rec1.append(recall)def set_seed():
+    
                 rec2.append(recall)
                 F2.append(Fscore)
             elif idx == 2:
@@ -651,6 +652,21 @@ def get_codes_frequency_no_vector(history_data, num_dim, key_set):
     return result_vector
 
 
+def set_seed(seed: int) -> None:
+    random.seed(seed)
+
+    np.random.seed(seed)
+
+    torch.manual_seed(seed)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 def main(argv):
 
     directory = './amodels/'
@@ -665,6 +681,9 @@ def main(argv):
     model_version = dataset+str(ind)
     topk = int(argv[3])
     training = int(argv[4])
+    seed = int(argv[5])
+
+    set_seed(seed)
 
     next_k_step = 1
     with open(history_file, 'r') as f:
@@ -699,7 +718,7 @@ def main(argv):
     # train mode or test mode
     if training == 1:
         trainIters(history_data, future_data, input_size, encoder, attn_decoder, model_version, training_key_set, val_key_set, weights,
-                   next_k_step, num_iter, topk)
+                   next_k_step, num_iter, topk, seed)
 
     else:
         for i in [10, 20]: #top k
@@ -712,9 +731,8 @@ def main(argv):
             print('k = ' + str(i))
             for model_epoch in range(num_iter):
                 print('Epoch: ', model_epoch)
-                encoder_pathes = './models/encoder' + str(model_version) + '_model_epoch' + str(model_epoch)
-                decoder_pathes = './models/decoder' + str(model_version) + '_model_epoch' + str(model_epoch)
-
+                encoder_pathes = './models/encoder' + str(model_version) + '_model_epoch' + str(model_epoch) + f'_seed_{seed}'
+                decoder_pathes = './models/decoder' + str(model_version) + '_model_epoch' + str(model_epoch) + f'_seed_{seed}'
                 encoder_instance = torch.load(encoder_pathes, map_location=torch.device('cpu'))
                 decoder_instance = torch.load(decoder_pathes, map_location=torch.device('cpu'))
 
