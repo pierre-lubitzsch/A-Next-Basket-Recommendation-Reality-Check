@@ -621,7 +621,7 @@ def evaluate(history_data, future_data, encoder, decoder, output_size, test_key_
             F.append(Fscore)
             if idx == 0:
                 prec1.append(precision)
-                rec1.append(recall)def set_seed():
+                rec1.append(recall)
     
                 rec2.append(recall)
                 F2.append(Fscore)

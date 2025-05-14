@@ -11,12 +11,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
     dataset = args.dataset
     fold_id = args.fold_id
+    random.seed(fold_id)
 
     data_future = pd.read_csv(f'dataset/{dataset}_future.csv')
     data_history = pd.read_csv(f'dataset/{dataset}_history.csv')
     data = pd.concat([data_history, data_future])
 
     user = list(set(data_future['user_id']))
+
     user_num = len(user)
     random.shuffle(user)
     user = [str(user_id) for user_id in user]
