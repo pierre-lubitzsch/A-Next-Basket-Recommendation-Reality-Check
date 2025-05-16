@@ -10,7 +10,7 @@ from train_model import train_model
 from model.temporal_set_prediction import temporal_set_prediction
 from utils.util import get_class_weights
 from utils.loss import BPRLoss, WeightMSELoss
-from utils.data_container import get_data_loader
+from utils.data_container import get_data_loader, get_data_loader_temporal_split
 from utils.load_config import get_attribute
 import torch
 import torch.nn as nn
@@ -46,6 +46,7 @@ def parse_args():
     parser.add_argument('--data_path', type=str, default='../../../jsondata/tafeng_history.json', help='Data path for class weights')
     parser.add_argument('--LOCAL', action='store_true', help='Set this flag to run locally')
     parser.add_argument('--seed', type=int, default=2, help='random seed')
+    parser.add_argument('--temporal_split', action="store_true", help='set this flag if you want a temporal split instead of a user split')
     return parser.parse_args()
 
 
@@ -72,21 +73,33 @@ def create_loss(loss_function, data_path):
     return loss_func
 
 
-def train(save_model_folder, history_path, future_path, keyset_path, item_embed_dim, loss_function, epochs, batch_size, learning_rate, optim, weight_decay, data_path, LOCAL):
+def train(save_model_folder, history_path, future_path, keyset_path, item_embed_dim, loss_function, epochs, batch_size, learning_rate, optim, weight_decay, data_path, LOCAL, temporal_split=False):
     model = create_model(save_model_folder, item_embed_dim)
     
-    train_data_loader = get_data_loader(history_path=history_path,
-                                        future_path=future_path,
-                                        keyset_path=keyset_path,
-                                        data_type='train',
-                                        batch_size=batch_size,
-                                        item_embedding_matrix=model.item_embedding)
-    valid_data_loader = get_data_loader(history_path=history_path,
-                                        future_path=future_path,
-                                        keyset_path=keyset_path,
-                                        data_type='val',
-                                        batch_size=batch_size,
-                                        item_embedding_matrix=model.item_embedding)
+    if temporal_split:
+        train_data_loader = get_data_loader_temporal_split(history_path=history_path,
+                                            future_path=future_path,
+                                            data_type='train',
+                                            batch_size=batch_size,
+                                            item_embedding_matrix=model.item_embedding)
+        valid_data_loader = get_data_loader_temporal_split(history_path=history_path,
+                                            future_path=future_path,
+                                            data_type='val',
+                                            batch_size=batch_size,
+                                            item_embedding_matrix=model.item_embedding)
+    else:
+        train_data_loader = get_data_loader(history_path=history_path,
+                                            future_path=future_path,
+                                            keyset_path=keyset_path,
+                                            data_type='train',
+                                            batch_size=batch_size,
+                                            item_embedding_matrix=model.item_embedding)
+        valid_data_loader = get_data_loader(history_path=history_path,
+                                            future_path=future_path,
+                                            keyset_path=keyset_path,
+                                            data_type='val',
+                                            batch_size=batch_size,
+                                            item_embedding_matrix=model.item_embedding)
     loss_func = create_loss(loss_function, data_path)
 
     data = get_attribute("data")
@@ -139,5 +152,6 @@ if __name__ == '__main__':
           optim=args.optim,
           weight_decay=args.weight_decay,
           data_path=args.data_path,
-          LOCAL=args.LOCAL)
+          LOCAL=args.LOCAL,
+          temporal_split=args.temporal_split)
     sys.exit()
