@@ -278,7 +278,7 @@ class TemporalSplitSetDataset(SetDataset):
         # user_data is a list of baskets of the user
 
         # use all users
-        user_list = list(set(data_future.keys()))
+        user_list = list(data_future.keys())
 
         if key is None:
             for key in ['train', 'val', 'test']:
@@ -287,7 +287,7 @@ class TemporalSplitSetDataset(SetDataset):
                     f_basket = data_future[user][1]
                     h_basket.append(f_basket)
                     # do not include users where we can't have train, valid, test data
-                    if len(h_basket) < 3:
+                    if len(h_basket) < 4:
                         continue
                     if key == "train":
                         user_data = [torch.tensor(list(set(basket)), dtype=torch.long) for basket in h_basket[:-2]]

@@ -312,7 +312,7 @@ def timeSince(since, percent):
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 def trainIters(data_history, data_future, output_size, encoder, decoder, model_name, training_key_set, val_keyset, codes_inverse_freq, next_k_step,
-               n_iters, top_k, seed):
+               n_iters, top_k, seed, temporal_split):
     start = time.time()
     print_loss_total = 0  # Reset every print_every
     # elem_wise_connection.initWeight()
@@ -326,6 +326,12 @@ def trainIters(data_history, data_future, output_size, encoder, decoder, model_n
     total_iter = 0
     criterion = custom_MultiLabelLoss_torch()
     best_recall = 0.0
+
+    # if temporal_split:
+    #     user_to_training_data = {user: (data_history[user][:-3] + [[-1]], [[-1], data_history[user][-3], [-1]]) for user in training_key_set}
+    # else:
+    #     user_to_training_data = {user: (data_history[user], data_future[user]) for user in training_key_set}
+
     # train n_iters epoch
     for j in range(n_iters):
         # get a suffle list
@@ -336,14 +342,34 @@ def trainIters(data_history, data_future, output_size, encoder, decoder, model_n
 
         for iter in tqdm(range(0, len(training_key_set))):
             # get training data and label.
-            input_variable = data_history[training_keys[iter]]
-            target_variable = data_future[training_keys[iter]]
+            if temporal_split:
+                # skip user if their basket count is too small for having at least 2 training, 1 valid, and 1 test basket
+                # substract 2 for the real lengths because the basket lists are padded with [-1] at the start and end
+                assert len(data_history[training_keys[iter]]) - 2 + len(data_future[training_keys[iter]]) - 2 >= 4, f"the basket count for user {training_keys[iter]} is smaller than 4, but he was not filtered out"
+                # data_history[training_keys[iter]][-3] is the training label
+                # data_history[training_keys[iter]][-2] is the valid label
+                # data_future[training_keys[iter]][1] is the test label
+                target_variable = [[-1], data_history[training_keys[iter]][-3], [-1]]
+                input_variable = data_history[training_keys[iter]][:-3] + [[-1]]
+            else:
+                input_variable = data_history[training_keys[iter]]
+                target_variable = data_future[training_keys[iter]]
 
             loss = train(input_variable, target_variable, encoder,
                          decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer, criterion, output_size)
 
             print_loss_total += loss
             total_iter += 1
+
+        # key_idx = np.random.permutation(len(training_key_set))
+        # for idx in tqdm(key_idx):
+        #     input_variable, target_variable = user_to_training_data[training_key_set[idx]]
+
+        #     loss = train(input_variable, target_variable, encoder,
+        #                  decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer, criterion, output_size)
+
+        #     print_loss_total += loss
+        #     total_iter += 1
 
         # print loss and save model
         print_loss_avg = print_loss_total / len(training_key_set)
@@ -353,7 +379,7 @@ def trainIters(data_history, data_future, output_size, encoder, decoder, model_n
         sys.stdout.flush()
 
         recall, ndcg, hr = evaluate(data_history, data_future, encoder, decoder, output_size, val_keyset, next_k_step,
-                 top_k)
+                 top_k, test_flag=False, temporal_split=temporal_split)
         if recall>best_recall:
             best_recall=recall
             # print(pred_dict[user])
@@ -572,7 +598,7 @@ def get_HT(groundtruth, pred_rank_list, k):
     return 0
 
 
-def evaluate(history_data, future_data, encoder, decoder, output_size, test_key_set, next_k_step, activate_codes_num):
+def evaluate(history_data, future_data, encoder, decoder, output_size, test_key_set, next_k_step, activate_codes_num, test_flag=True, temporal_split=0):
     #activate_codes_num: pick top x as the basket.
     prec = []
     rec = []
@@ -595,8 +621,17 @@ def evaluate(history_data, future_data, encoder, decoder, output_size, test_key_
         # training_pair = training_pairs[iter - 1]
         # input_variable = training_pair[0]
         # target_variable = training_pair[1]
-        input_variable = history_data[test_key_set[iter]]
-        target_variable = future_data[test_key_set[iter]]
+        
+        if temporal_split:
+            if test_flag:
+                target_variable = future_data[test_key_set[iter]]
+                input_variable = history_data[test_key_set[iter]]
+            else:
+                target_variable = [[-1], history_data[test_key_set[iter]][-2], [-1]]
+                input_variable = history_data[test_key_set[iter]][:-2] + [[-1]]
+        else:
+            target_variable = future_data[test_key_set[iter]]
+            input_variable = history_data[test_key_set[iter]]
 
         if len(target_variable) < 2 + next_k_step:
             continue
@@ -663,6 +698,7 @@ def set_seed(seed: int) -> None:
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
+    # torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
@@ -682,6 +718,7 @@ def main(argv):
     topk = int(argv[3])
     training = int(argv[4])
     seed = int(argv[5])
+    temporal_split = int(sys.argv[6])
 
     set_seed(seed)
 
@@ -693,10 +730,21 @@ def main(argv):
     with open(keyset_file, 'r') as f:
         keyset = json.load(f)
 
-    input_size = keyset['item_num']
-    training_key_set = keyset['train']
-    val_key_set = keyset['val']
-    test_key_set = keyset['test']
+
+    if temporal_split:
+        # input_size, a.k.a. the number of items, is the same for all, and as it is saved only in the keyset file as of now we get it from there
+        input_size = keyset['item_num']
+        # skip user if their basket count is too small for having at least 2 training, 1 valid, and 1 test basket
+        # substract 2 for the real lengths because the basket lists are padded with [-1] at the start and end
+        user_list = list(filter(lambda x: len(history_data[x]) - 2 + len(future_data[x]) - 2 >= 4, list(future_data.keys())))
+        training_key_set = user_list
+        val_key_set = user_list.copy()
+        test_key_set = user_list.copy()
+    else:
+        input_size = keyset['item_num']
+        training_key_set = keyset['train']
+        val_key_set = keyset['val']
+        test_key_set = keyset['test']
 
     # weights is inverse personal top frequency. normalized by max freq.
     weights = np.zeros(input_size)
@@ -718,7 +766,7 @@ def main(argv):
     # train mode or test mode
     if training == 1:
         trainIters(history_data, future_data, input_size, encoder, attn_decoder, model_version, training_key_set, val_key_set, weights,
-                   next_k_step, num_iter, topk, seed)
+                   next_k_step, num_iter, topk, seed, temporal_split)
 
     else:
         for i in [10, 20]: #top k
@@ -737,12 +785,12 @@ def main(argv):
                 decoder_instance = torch.load(decoder_pathes, map_location=torch.device('cpu'))
 
                 recall, ndcg, hr = evaluate(history_data, future_data, encoder_instance, decoder_instance, input_size,
-                                            val_key_set, next_k_step, i)
+                                            val_key_set, next_k_step, i, test_flag=True, temporal_split=temporal_split)
                 valid_recall.append(recall)
                 valid_ndcg.append(ndcg)
                 valid_hr.append(hr)
                 recall, ndcg, hr = evaluate(history_data, future_data, encoder_instance, decoder_instance, input_size,
-                                            test_key_set, next_k_step, i)
+                                            test_key_set, next_k_step, i, test_flag=True, temporal_split=temporal_split)
                 recall_list.append(recall)
                 ndcg_list.append(ndcg)
                 hr_list.append(hr)
