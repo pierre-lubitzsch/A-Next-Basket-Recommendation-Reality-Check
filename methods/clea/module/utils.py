@@ -59,9 +59,12 @@ def get_neg_p(p_item,neg_set):
     return p_neg
 
 # @profile
-def get_dataset(input_dir, keyset_dir, max_basket_size, next_k = 1):
+def get_dataset(input_dir, keyset_dir, max_basket_size, next_k = 1, temporal_split=False):
     print("--------------Begin Data Process--------------")
     neg_ratio = 1
+    # we need to leave the last 3 baskets as train label, valid label and test label respectively for a temporal split -> next_k = 3
+    if temporal_split and next_k < 3:
+        next_k = 3
 
     with open(input_dir, 'r') as f:
         user_tran_date_dict = json.load(f)
@@ -107,63 +110,100 @@ def get_dataset(input_dir, keyset_dir, max_basket_size, next_k = 1):
     with open(keyset_dir, 'r') as f:
         keyset = json.load(f)
 
-    train_userid_list = keyset['train']
-    valid_userid_list = keyset['val']
-    test_userid_list = keyset['test']
+    if temporal_split:
+        # leave out users with < 4 baskets in their history
+        user_list = list(filter(lambda x: len(user_tran_date_dict[x]) >= 4, list(user_tran_date_dict.keys())))
+        train_userid_list = user_list
+        valid_userid_list = user_list.copy()
+        test_userid_list = user_list.copy()
+    else:
+        train_userid_list = keyset['train']
+        valid_userid_list = keyset['val']
+        test_userid_list = keyset['test']
 
     # construct neg sample dict
     for userid in user_tran_date_dict.keys():
-        if userid in train_userid_list:
-            seq = user_tran_date_dict[userid][:-next_k]
-        else:
-            seq = user_tran_date_dict[userid][:-next_k]
-        seq_pool = []
-        for basket in seq:
-            seq_pool = seq_pool + basket
+        seq = user_tran_date_dict[userid][:-next_k]
+        seq_pool = [item for basket in seq[:-next_k] for item in basket]
         neg_sample[int(userid)] = list(set(item_list) - set(seq_pool))
 
-    for userid in user_tran_date_dict.keys():
+    def pad_basket(basket):
+        if len(basket) > max_basket_size:
+            return basket[-max_basket_size:]
+        return basket + [-1] * (max_basket_size - len(basket))
+
+    def build_context(input_seq):
+        S_pool = sum(input_seq, [])                 # flatten
+        H      = np.zeros(itemnum)
+        for b in input_seq:
+            H[list(set(b) - {-1})] += 1
+        L  = len(input_seq)
+        H  = H / L
+        H_pad = np.zeros(itemnum + 1)
+        H_pad[1:] = H
+        return S_pool, H_pad[:2], L 
+
+    userid_iterator = user_list if temporal_split else user_tran_date_dict.keys()
+
+    for userid in userid_iterator:
         seq = user_tran_date_dict[userid]
 
-        padded_seq = []
-        for basketid, basket in enumerate(seq):
-            if len(basket) > max_basket_size:
-                basket = basket[-max_basket_size:]  # pick the lastest next n basket..
-            else:
-                padd_num = max_basket_size - len(basket)
-                padding_item = [-1] * padd_num  # pad [-1]
-                basket = basket + padding_item
-            padded_seq.append(basket)
-        U = int(userid)
-        S = padded_seq[:-1]
-        S_pool = []
-        H = np.zeros(itemnum)
-        H_pad = np.zeros(itemnum + 1)
-        for basket in S:
-            S_pool = S_pool + basket
-            no_pad_basket = list(set(basket) - set([-1]))
-            H[no_pad_basket] += 1
-        H = H / len(padded_seq[:-1])  # item freq/lenth
-        H_pad[1:] = H  # start from 2nd.
-        L = len(padded_seq[:-1])
-
-        if userid in train_userid_list:
-            target_basket = seq[-1]
-            for item in target_basket:
-                T = item
+        padded_seq = [pad_basket(b) for b in seq]
+        
+        if temporal_split:
+            # Train    target = basket n-2
+            train_input  = padded_seq[:-3]
+            train_target = seq[-3]                     # UN-padded basket
+            S_pool, H_pad, L = build_context(train_input)
+            for T in train_target:
                 N = random.sample(neg_sample[int(userid)], neg_ratio)
-                train_batch[L].append((U, S_pool, T, H_pad[0:2], N, L))
+                train_batch[L].append((int(userid), S_pool, T, H_pad, N, L))
                 train_times += 1
 
-        if userid in valid_userid_list:
-            target_basket = padded_seq[-1]
-            valid_batch[L].append((U, S_pool, target_basket, H_pad[0:2], L))
+            # VALID    target = basket n-1
+            valid_input   = padded_seq[:-2]
+            valid_target  = padded_seq[-2]             # padded
+            S_pool, H_pad, L = build_context(valid_input)
+            valid_batch[L].append((int(userid), S_pool, valid_target, H_pad, L))
             valid_times += 1
 
-        if userid in test_userid_list:
-            target_basket = padded_seq[-1]
-            test_batch[L].append((U, S_pool, target_basket, H_pad[0:2], L))
+            # TEST     target = basket n
+            test_input    = padded_seq[:-1]
+            test_target   = padded_seq[-1]             # padded
+            S_pool, H_pad, L = build_context(test_input)
+            test_batch[L].append((int(userid), S_pool, test_target, H_pad, L))
             test_times += 1
+        else:
+            U = int(userid)
+            S = padded_seq[:-1]
+            S_pool = []
+            H = np.zeros(itemnum)
+            H_pad = np.zeros(itemnum + 1)
+            for basket in S:
+                S_pool = S_pool + basket
+                no_pad_basket = list(set(basket) - set([-1]))
+                H[no_pad_basket] += 1
+            H = H / len(padded_seq[:-1])  # item freq/lenth
+            H_pad[1:] = H  # start from 2nd.
+            L = len(padded_seq[:-1])
+
+            if userid in train_userid_list:
+                target_basket = seq[-1]
+                for item in target_basket:
+                    T = item
+                    N = random.sample(neg_sample[int(userid)], neg_ratio)
+                    train_batch[L].append((U, S_pool, T, H_pad[0:2], N, L))
+                    train_times += 1
+
+            if userid in valid_userid_list:
+                target_basket = padded_seq[-1]
+                valid_batch[L].append((U, S_pool, target_basket, H_pad[0:2], L))
+                valid_times += 1
+
+            if userid in test_userid_list:
+                target_basket = padded_seq[-1]
+                test_batch[L].append((U, S_pool, target_basket, H_pad[0:2], L))
+                test_times += 1
 
     for l in train_batch.keys():
         TRAIN_DATASET.append(list(zip(*train_batch[l])))

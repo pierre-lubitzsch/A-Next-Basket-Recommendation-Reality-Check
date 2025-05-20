@@ -53,6 +53,7 @@ parser.add_argument('--clip_value', type=float, default=0.1, help='dropout')
 parser.add_argument('--to2', type=int, default= 0, help='n_users TaFeng:16060 Instacart:6885 Delicious:1735')
 
 parser.add_argument('--seed', type=int, default=2, help='random seed')
+parser.add_argument('--temporal_split', action="store_true", help="set this flag if you want a temporal split instead of a user split")
 
 args = parser.parse_args()
 
@@ -134,6 +135,7 @@ class Config(object):
         self.histroy = args.history
 
         self.seed = args.seed
+        self.temporal_split = args.temporal_split
 
     def list_all_member(self, logger):
         for name, value in vars(self).items():

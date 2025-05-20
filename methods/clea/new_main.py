@@ -10,6 +10,7 @@ from module.config import Config
 import pickle
 import os.path
 from module.logger import Logger
+from tqdm import tqdm
 
 # @profile
 def train():
@@ -35,7 +36,7 @@ def train():
     input_dir = os.path.join('./', Config().input_dir)
     keyset_dir = os.path.join('./', Config().keyset_dir)
     TRAIN_DATASET, VALID_DATASET, TEST_DATASET, neg_sample, weights, itemnum, train_times, test_times, valid_times = get_dataset(
-        input_dir, keyset_dir, Config().max_basket_size)
+        input_dir, keyset_dir, Config().max_basket_size, temporal_split=Config().temporal_split)
     logger.info('test user nums : {}  valid user nums : {}'.format(test_times, valid_times))
     weights = torch.tensor(weights, dtype=torch.float32).to(device)
 
