@@ -24,7 +24,8 @@ def train_model(model: nn.Module,
                 epochs,
                 optimizer,
                 model_folder,
-                tensorboard_folder):
+                tensorboard_folder,
+                LOCAL=False):
     """
     Args:
         model: nn.Module
@@ -70,7 +71,7 @@ def train_model(model: nn.Module,
             y_true = []
             y_pred = []
             total_loss = 0.0
-            tqdm_loader = tqdm(data_loader_dic[name])
+            tqdm_loader = tqdm(data_loader_dic[name], disable=not LOCAL)
             for step, (g, nodes_feature, edges_weight, lengths, nodes, truth_data, users_frequency) in enumerate(tqdm_loader):
                 g, nodes_feature, edges_weight, lengths, nodes, truth_data, users_frequency = \
                     convert_all_data_to_gpu(g, nodes_feature, edges_weight, lengths, nodes, truth_data, users_frequency)

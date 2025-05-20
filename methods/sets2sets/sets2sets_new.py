@@ -312,7 +312,7 @@ def timeSince(since, percent):
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 def trainIters(data_history, data_future, output_size, encoder, decoder, model_name, training_key_set, val_keyset, codes_inverse_freq, next_k_step,
-               n_iters, top_k, seed, temporal_split):
+               n_iters, top_k, seed, temporal_split, LOCAL):
     start = time.time()
     print_loss_total = 0  # Reset every print_every
     # elem_wise_connection.initWeight()
@@ -340,7 +340,7 @@ def trainIters(data_history, data_future, output_size, encoder, decoder, model_n
         for idx in key_idx:
             training_keys.append(training_key_set[idx])
 
-        for iter in tqdm(range(0, len(training_key_set))):
+        for iter in tqdm(range(0, len(training_key_set)), disable=not LOCAL):
             # get training data and label.
             if temporal_split:
                 # skip user if their basket count is too small for having at least 2 training, 1 valid, and 1 test basket
@@ -719,6 +719,7 @@ def main(argv):
     training = int(argv[4])
     seed = int(argv[5])
     temporal_split = int(sys.argv[6])
+    LOCAL = int(sys.argv[7])
 
     set_seed(seed)
 
@@ -766,7 +767,7 @@ def main(argv):
     # train mode or test mode
     if training == 1:
         trainIters(history_data, future_data, input_size, encoder, attn_decoder, model_version, training_key_set, val_key_set, weights,
-                   next_k_step, num_iter, topk, seed, temporal_split)
+                   next_k_step, num_iter, topk, seed, temporal_split, LOCAL)
 
     else:
         for i in [10, 20]: #top k

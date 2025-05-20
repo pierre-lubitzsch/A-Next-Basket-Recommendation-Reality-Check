@@ -73,7 +73,7 @@ def create_loss(loss_function, data_path):
     return loss_func
 
 
-def train(save_model_folder, history_path, future_path, keyset_path, item_embed_dim, loss_function, epochs, batch_size, learning_rate, optim, weight_decay, data_path, LOCAL, temporal_split=False):
+def train(save_model_folder, history_path, future_path, keyset_path, item_embed_dim, loss_function, epochs, batch_size, learning_rate, optim, weight_decay, data_path, LOCAL=False, temporal_split=False):
     model = create_model(save_model_folder, item_embed_dim)
     
     if temporal_split:
@@ -134,7 +134,8 @@ def train(save_model_folder, history_path, future_path, keyset_path, item_embed_
                 epochs=epochs,
                 optimizer=optimizer,
                 model_folder=model_folder,
-                tensorboard_folder=tensorboard_folder)
+                tensorboard_folder=tensorboard_folder,
+                LOCAL=LOCAL)
 
 
 if __name__ == '__main__':
