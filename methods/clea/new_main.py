@@ -29,7 +29,7 @@ def train():
     isExist = os.path.exists(Config().output_dir)
     if not isExist:
         os.makedirs(Config().output_dir)
-    logger_path = os.path.join(Config().output_dir, 'NB_{}_{}_{}.log'.format(Config().dataset, Config().foldk, Config().log_fire))
+    logger_path = os.path.join(Config().output_dir, f'NB_{Config().dataset}_{Config().foldk}_{Config().log_fire}_{Config().seed}.log')
     logger = Logger(logger_path)
     logger.info('*' * 150)
     logger.info(' *************************************  model_1 *************************************** ')
@@ -858,8 +858,10 @@ def train():
         B = first_batch_size
 
         if Config().before_epoch > 0:
-            PATH = os.path.join(Config().MODEL_DIR, "base_model_{}_{}_{}.pt".format(Config().dataset, Config().foldk,
-                                                                                 'basemodel'))
+            PATH = os.path.join(Config().MODEL_DIR,
+                                                      f"base_model_{Config().dataset}_{Config().foldk}_basemodel_seed_{Config().seed}.pt")
+            # PATH = os.path.join(Config().MODEL_DIR, "base_model_{}_{}_{}.pt".format(Config().dataset, Config().foldk,
+            #                                                                      'basemodel'))
             checkpoint0 = torch.load(PATH)
             checkpoint = checkpoint0['model_state_dict']
             # optimizer_dict[0].load_state_dict(checkpoint0['optimizer0_state_dict'])
@@ -1000,8 +1002,7 @@ def train():
                         if ndcg > best_ndcg: better += 1
                         if better > 1:
                             model_name = os.path.join(Config().MODEL_DIR,
-                                                      "base_model_{}_{}_{}.pt".format(Config().dataset, Config().foldk,
-                                                                                      Config().log_fire))
+                                                      f"base_model_{Config().dataset}_{Config().foldk}_{Config().log_fire}_seed_{Config().seed}.pt")
                             checkpoint = {'epoch': epoch,
                                           'model_state_dict': NB.state_dict()
                                           }
@@ -1034,8 +1035,7 @@ def train():
                     if ndcg > best_ndcg: better += 1
                     if better > 1:
                         best_PATH = os.path.join(Config().MODEL_DIR,
-                                                 "model_1_{}_{}_{}.pt".format(Config().dataset, Config().foldk,
-                                                                              Config().log_fire))
+                                                 f"model_1_{Config().dataset}_{Config().foldk}_{Config().log_fire}_seed_{Config().seed}.pt")
                         checkpoint = {'epoch': epoch,
                                       'temp0': temp0,
                                       'G1_flag':G1_flag,
