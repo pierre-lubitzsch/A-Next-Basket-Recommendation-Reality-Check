@@ -778,14 +778,15 @@ def main(argv):
             ndcg_list = []
             hr_list = []
             print('k = ' + str(i))
+            # only eval last epoch
             for model_epoch in range(num_iter):
                 print('Epoch: ', model_epoch)
                 encoder_pathes = f'./models/encoder_{model_version}_model_epoch{model_epoch}_seed_{seed}'
                 decoder_pathes = f'./models/decoder_{model_version}_model_epoch{model_epoch}_seed_{seed}'
                 # encoder_pathes = './models/encoder' + str(model_version) + '_model_epoch' + str(model_epoch) + f'_seed_{seed}'
                 # decoder_pathes = './models/decoder' + str(model_version) + '_model_epoch' + str(model_epoch) + f'_seed_{seed}'
-                encoder_instance = torch.load(encoder_pathes, map_location=torch.device('cpu'))
-                decoder_instance = torch.load(decoder_pathes, map_location=torch.device('cpu'))
+                encoder_instance = torch.load(encoder_pathes, map_location=torch.device('cuda'), weights_only=False)
+                decoder_instance = torch.load(decoder_pathes, map_location=torch.device('cuda'), weights_only=False)
 
                 recall, ndcg, hr = evaluate(history_data, future_data, encoder_instance, decoder_instance, input_size,
                                             val_key_set, next_k_step, i, test_flag=True, temporal_split=temporal_split)
