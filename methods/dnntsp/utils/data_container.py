@@ -278,7 +278,7 @@ class TemporalSplitSetDataset(SetDataset):
         # user_data is a list of baskets of the user
 
         # use all users
-        user_list = list(data_future.keys())
+        user_list = sorted(data_future.keys(), key=int)
 
         if key is None:
             for key in ['train', 'val', 'test']:
