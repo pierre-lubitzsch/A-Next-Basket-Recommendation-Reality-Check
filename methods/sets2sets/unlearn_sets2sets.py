@@ -589,6 +589,9 @@ def unlearn_main():
                 print('Epoch: ', model_epoch)
                 encoder_pathes = f'./models/encoder_{model_version}_model_epoch{model_epoch}_seed_{seed}'
                 decoder_pathes = f'./models/decoder_{model_version}_model_epoch{model_epoch}_seed_{seed}'
+                if not os.path.exists(encoder_pathes) or not os.path.exists(decoder_pathes):
+                    print(f"Skip epoch {model_epoch}, no new best model or last epoch")
+                    continue
                 encoder_instance = torch.load(encoder_pathes, map_location=torch.device('cuda'), weights_only=False)
                 decoder_instance = torch.load(decoder_pathes, map_location=torch.device('cuda'), weights_only=False)
 
