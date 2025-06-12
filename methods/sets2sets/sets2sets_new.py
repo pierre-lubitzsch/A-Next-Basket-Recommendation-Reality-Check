@@ -11,7 +11,7 @@ from torch.autograd import Variable
 from torch import optim
 import torch.nn.functional as F
 
-num_iter = 20 #epoch number
+num_iter = 3 #epoch number, 0 is usually the best epoch...
 hidden_size = 32
 num_layers = 1
 
