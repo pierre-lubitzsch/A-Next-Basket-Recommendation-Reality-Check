@@ -312,7 +312,7 @@ def timeSince(since, percent):
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 def trainIters(data_history, data_future, output_size, encoder, decoder, model_name, training_key_set, val_keyset, codes_inverse_freq, next_k_step,
-               n_iters, top_k, seed, temporal_split, LOCAL, retrain=False, retrain_checkpoint_idx_to_match=None):
+               n_iters, top_k, seed, temporal_split, LOCAL, retrain=False, retrain_checkpoint_idx_to_match=None, retrain_str=""):
     start = time.time()
     print_loss_total = 0  # Reset every print_every
     # elem_wise_connection.initWeight()
@@ -380,7 +380,7 @@ def trainIters(data_history, data_future, output_size, encoder, decoder, model_n
 
         recall, ndcg, hr = evaluate(data_history, data_future, encoder, decoder, output_size, val_keyset, next_k_step,
                  top_k, test_flag=False, temporal_split=temporal_split)
-        retrain_str = f"_retrain_checkpoint_idx_to_match_{retrain_checkpoint_idx_to_match}" if retrain else ""
+
         if recall>best_recall:
             best_recall=recall
             # print(pred_dict[user])
