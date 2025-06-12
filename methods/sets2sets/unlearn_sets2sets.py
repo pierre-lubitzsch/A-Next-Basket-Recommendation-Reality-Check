@@ -376,7 +376,7 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
         # unlearn sequentually per user and save every quarter of len(unlearning_user_ids)
         n = len(unlearning_user_ids)
         checkpoint_every = math.ceil(n / 4)
-        checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 1 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 1 and i == n - 1))]
+        checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 5 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 5 and i == n - 1))]
         if len(checkpoint_idxs) == 5:
             checkpoint_idxs = checkpoint_idxs[:4] + [checkpoint_idxs[-1]]
         for i, user in enumerate(sorted(unlearning_user_ids)):
@@ -633,9 +633,13 @@ def unlearn_main():
         # remove current forget set from the training data. need parameter to tell how much of the forget set is taken to get the wanted retrained models at certain subsets of the unlearning set
         n = len(training_key_set)
         checkpoint_every = math.ceil(n / 4)
-        checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 1 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 1 and i == n - 1))]
+        checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 5 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 5 and i == n - 1))]
+        print(checkpoint_idxs)
         if len(checkpoint_idxs) == 5:
             checkpoint_idxs = checkpoint_idxs[:4] + [checkpoint_idxs[-1]]
+        print(checkpoint_idxs)
+        print(n)
+        exit(0)
         unlearning_set_take_first_x = checkpoint_idxs[args.retrain_checkpoint_idx_to_match]
         # remove sensitive items from users in retraining
         users_in_unlearning_set = sorted(training_key_set)[:unlearning_set_take_first_x + 1]
@@ -694,8 +698,8 @@ def unlearn_main():
     #     checkpoint_idxs = [
     #         i for i in range(n)
     #         if i > 0 and (
-    #             (i <= 3 * n // 4 + 1 and i % checkpoint_every == 0)
-    #             or (i >= 3 * n // 4 + 1 and i == n - 1)
+    #             (i <= 3 * n // 4 + 5 and i % checkpoint_every == 0)
+    #             or (i >= 3 * n // 4 + 5 and i == n - 1)
     #         )
     #     ]
     #     if len(checkpoint_idxs) == 5:                # keep at most 5 checkpoints
