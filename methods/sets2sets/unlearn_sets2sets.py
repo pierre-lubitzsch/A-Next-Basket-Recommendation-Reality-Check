@@ -637,9 +637,7 @@ def unlearn_main():
         print(checkpoint_idxs)
         if len(checkpoint_idxs) == 5:
             checkpoint_idxs = checkpoint_idxs[:4] + [checkpoint_idxs[-1]]
-        print(checkpoint_idxs)
-        print(n)
-        exit(0)
+
         unlearning_set_take_first_x = checkpoint_idxs[args.retrain_checkpoint_idx_to_match]
         # remove sensitive items from users in retraining
         users_in_unlearning_set = sorted(training_key_set)[:unlearning_set_take_first_x + 1]
