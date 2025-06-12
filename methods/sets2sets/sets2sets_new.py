@@ -312,7 +312,7 @@ def timeSince(since, percent):
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 def trainIters(data_history, data_future, output_size, encoder, decoder, model_name, training_key_set, val_keyset, codes_inverse_freq, next_k_step,
-               n_iters, top_k, seed, temporal_split, LOCAL):
+               n_iters, top_k, seed, temporal_split, LOCAL, retrain=False, retrain_checkpoint_idx_to_match=None):
     start = time.time()
     print_loss_total = 0  # Reset every print_every
     # elem_wise_connection.initWeight()
@@ -380,20 +380,21 @@ def trainIters(data_history, data_future, output_size, encoder, decoder, model_n
 
         recall, ndcg, hr = evaluate(data_history, data_future, encoder, decoder, output_size, val_keyset, next_k_step,
                  top_k, test_flag=False, temporal_split=temporal_split)
+        retrain_str = f"_retrain_checkpoint_idx_to_match_{retrain_checkpoint_idx_to_match}" if retrain else ""
         if recall>best_recall:
             best_recall=recall
             # print(pred_dict[user])
-            filepath = './models/encoder_' + (model_name) + f'_model_best_seed_{seed}'
+            filepath = './models/encoder_' + (model_name) + f'_model_best_seed_{seed}{retrain_str}'
             torch.save(encoder, filepath)
-            filepath = './models/decoder_' + (model_name) + f'_model_best_seed_{seed}'
+            filepath = './models/decoder_' + (model_name) + f'_model_best_seed_{seed}{retrain_str}'
             torch.save(decoder, filepath)
             print('Recall:', recall)
-            torch.save(encoder, f'./models/encoder_{model_name}_model_epoch{j}_seed_{seed}')
-            torch.save(decoder, f'./models/decoder_{model_name}_model_epoch{j}_seed_{seed}')
+            torch.save(encoder, f'./models/encoder_{model_name}_model_epoch{j}_seed_{seed}{retrain_str}')
+            torch.save(decoder, f'./models/decoder_{model_name}_model_epoch{j}_seed_{seed}{retrain_str}')
             print('Model is saved.')
         elif j == n_iters - 1:
-            torch.save(encoder, f'./models/encoder_{model_name}_model_epoch{j}_seed_{seed}')
-            torch.save(decoder, f'./models/decoder_{model_name}_model_epoch{j}_seed_{seed}')
+            torch.save(encoder, f'./models/encoder_{model_name}_model_epoch{j}_seed_{seed}{retrain_str}')
+            torch.save(decoder, f'./models/decoder_{model_name}_model_epoch{j}_seed_{seed}{retrain_str}')
             print('Model is saved.')
         print('Finish epoch: ' + str(j))
         

@@ -305,6 +305,8 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
         n = len(unlearning_user_ids)
         checkpoint_every = math.ceil(n / 4)
         checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 1 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 1 and i == n - 1))]
+        if len(checkpoint_idxs) == 5:
+            checkpoint_idxs = checkpoint_idxs[:4] + [checkpoint_idxs[-1]]
         for i, user in enumerate(sorted(unlearning_user_ids)):
             cur_unlearning_user_ids = [user]
             cur_clean_data_history_and_future = {u: baskets for u, baskets in clean_data_history_and_future.items() if u in retain_user_ids or u == user}
@@ -544,6 +546,8 @@ def unlearn_main():
         n = len(training_key_set)
         checkpoint_every = math.ceil(n / 4)
         checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 1 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 1 and i == n - 1))]
+        if len(checkpoint_idxs) == 5:
+            checkpoint_idxs = checkpoint_idxs[:4] + [checkpoint_idxs[-1]]
         unlearning_set_take_first_x = checkpoint_idxs[args.retrain_checkpoint_idx_to_match]
         # remove sensitive items from users in retraining
         users_in_unlearning_set = sorted(training_key_set)[:unlearning_set_take_first_x + 1]
@@ -562,7 +566,7 @@ def unlearn_main():
         # don't train on users where if we take away
         training_key_set = sorted(set(user_list) - set(filtered_users_in_unlearning_set_no_adaptation))
         trainIters(history_data, future_data, input_size, encoder, attn_decoder, model_version, training_key_set, val_key_set, weights,
-                   next_k_step, num_iter, topk, seed, temporal_split, LOCAL)
+                   next_k_step, num_iter, topk, seed, temporal_split, LOCAL, retrain=True, retrain_checkpoint_idx_to_match=args.retrain_checkpoint_idx_to_match)
     elif training == 2: # unlearn
         # load models to be unlearned
 
@@ -576,7 +580,58 @@ def unlearn_main():
         unlearnIters(history_data, future_data, input_size, encoder_instance, attn_decoder, model_version, training_key_set, val_key_set, retain_key_set, weights,
                    next_k_step, num_iter, topk, seed, temporal_split, LOCAL, user_to_unlearning_items, unlearning_algorithm)
     else: #test
+        n = len(training_key_set)
+        checkpoint_every = math.ceil(n / 4)
+        checkpoint_idxs = [
+            i for i in range(n)
+            if i > 0 and (
+                (i <= 3 * n // 4 + 1 and i % checkpoint_every == 0)
+                or (i >= 3 * n // 4 + 1 and i == n - 1)
+            )
+        ]
+        if len(checkpoint_idxs) == 5:                # keep at most 5 checkpoints
+            checkpoint_idxs = checkpoint_idxs[:4] + [checkpoint_idxs[-1]]
+
+        # which checkpoint do we want to mimic?  (if the flag wasn’t supplied, take the last one)
+        if args.retrain_checkpoint_idx_to_match is None:
+            unlearning_set_take_first_x = checkpoint_idxs[-1]
+        else:
+            unlearning_set_take_first_x = checkpoint_idxs[args.retrain_checkpoint_idx_to_match]
+
+        # users whose baskets will be sanitised
+        users_in_unlearning_set = sorted(training_key_set)[:unlearning_set_take_first_x + 1]
+
+        # actually strip the sensitive items; keep track of users rendered unusable (<4 baskets)
+        filtered_users_in_unlearning_set_no_adaptation = []
+        for user in users_in_unlearning_set:
+            unpadded_baskets = history_data[user][1:-1] + [future_data[user][1]]
+
+            # remove sensitive items
+            clean_unpadded_baskets = [
+                [item for item in basket if item not in user_to_unlearning_items[user]]
+                for basket in unpadded_baskets
+            ]
+            clean_unpadded_baskets = [b for b in clean_unpadded_baskets if len(b) > 0]
+
+            if len(clean_unpadded_baskets) < 4:
+                filtered_users_in_unlearning_set_no_adaptation.append(user)
+                continue  # don’t keep them in evaluation
+
+            # rebuild padded history / future
+            history_data[user] = [[-1]] + clean_unpadded_baskets[:-1] + [[-1]]
+            future_data[user]  = [[-1], clean_unpadded_baskets[-1], [-1]]
+
+            assert (len(history_data[user]) - 2 + len(future_data[user]) - 2 >= 4), (
+                f"{user} has insufficient baskets after sanitisation."
+            )
+
+        # remove unusable users everywhere
+        training_key_set = sorted(set(training_key_set) - set(filtered_users_in_unlearning_set_no_adaptation))
+        val_key_set = sorted(set(val_key_set) - set(filtered_users_in_unlearning_set_no_adaptation))
+        test_key_set = sorted(set(test_key_set) - set(filtered_users_in_unlearning_set_no_adaptation))
+
         for i in [10, 20]: #top k
+            print("Unlearned model")
             valid_recall = []
             valid_ndcg = []
             valid_hr = []
@@ -585,12 +640,14 @@ def unlearn_main():
             hr_list = []
             print('k = ' + str(i))
             # only eval last epoch
-            for model_epoch in range(num_iter):
-                print('Epoch: ', model_epoch)
-                encoder_pathes = f'./models/encoder_{model_version}_model_epoch{model_epoch}_seed_{seed}'
-                decoder_pathes = f'./models/decoder_{model_version}_model_epoch{model_epoch}_seed_{seed}'
+            for model_epoch in checkpoint_idxs:
+                print('Users in unlearning set: ', model_epoch)
+                encoder_pathes = f'./models/unlearn_encoder_{model_version}_model_best_unlearn_epoch{model_epoch}_seed_{seed}'
+                decoder_pathes = f'./models/unlearn_decoder_{model_version}_model_best_unlearn_epoch{model_epoch}_seed_{seed}'
+                # encoder_pathes = f'./models/encoder_{model_version}_model_epoch{model_epoch}_seed_{seed}'
+                # decoder_pathes = f'./models/decoder_{model_version}_model_epoch{model_epoch}_seed_{seed}'
                 if not os.path.exists(encoder_pathes) or not os.path.exists(decoder_pathes):
-                    print(f"Skip epoch {model_epoch}, no new best model or last epoch")
+                    print(f"Skip epoch {model_epoch} for unlearning, no new best model or last epoch")
                     continue
                 encoder_instance = torch.load(encoder_pathes, map_location=torch.device('cuda'), weights_only=False)
                 decoder_instance = torch.load(decoder_pathes, map_location=torch.device('cuda'), weights_only=False)
@@ -631,6 +688,125 @@ def unlearn_main():
             print('ndcg: ', ndcg_list[idx3])
             print('phr: ', hr_list[idx3])
             sys.stdout.flush()
+
+
+            print("Initial model:")
+            valid_recall = []
+            valid_ndcg = []
+            valid_hr = []
+            recall_list = []
+            ndcg_list = []
+            hr_list = []
+            print('k = ' + str(i))
+            # only eval last epoch
+            for model_epoch in range(num_iter):
+                print('Epoch: ', model_epoch)
+                encoder_pathes = f'./models/encoder_{model_version}_model_epoch{model_epoch}_seed_{seed}'
+                decoder_pathes = f'./models/decoder_{model_version}_model_epoch{model_epoch}_seed_{seed}'
+                if not os.path.exists(encoder_pathes) or not os.path.exists(decoder_pathes):
+                    print(f"Skip epoch {model_epoch}, no new best model or last epoch")
+                    continue
+                # encoder_pathes = './models/encoder' + str(model_version) + '_model_epoch' + str(model_epoch) + f'_seed_{seed}'
+                # decoder_pathes = './models/decoder' + str(model_version) + '_model_epoch' + str(model_epoch) + f'_seed_{seed}'
+                encoder_instance = torch.load(encoder_pathes, map_location=torch.device('cuda'), weights_only=False)
+                decoder_instance = torch.load(decoder_pathes, map_location=torch.device('cuda'), weights_only=False)
+
+                recall, ndcg, hr = evaluate(history_data, future_data, encoder_instance, decoder_instance, input_size,
+                                            val_key_set, next_k_step, i, test_flag=True, temporal_split=temporal_split)
+                valid_recall.append(recall)
+                valid_ndcg.append(ndcg)
+                valid_hr.append(hr)
+                recall, ndcg, hr = evaluate(history_data, future_data, encoder_instance, decoder_instance, input_size,
+                                            test_key_set, next_k_step, i, test_flag=True, temporal_split=temporal_split)
+                recall_list.append(recall)
+                ndcg_list.append(ndcg)
+                hr_list.append(hr)
+            valid_recall = np.asarray(valid_recall)
+            valid_ndcg = np.asarray(valid_ndcg)
+            valid_hr = np.asarray(valid_hr)
+            idx1 = valid_recall.argsort()[::-1][0]
+            idx2 = valid_ndcg.argsort()[::-1][0]
+            idx3 = valid_hr.argsort()[::-1][0]
+            print('max valid recall results:')
+            print('Epoch: ', idx1)
+            print('recall: ', recall_list[idx1])
+            print('ndcg: ', ndcg_list[idx1])
+            print('phr: ', hr_list[idx1])
+            sys.stdout.flush()
+
+            print('max valid ndcg results:')
+            print('Epoch: ', idx2)
+            print('recall: ', recall_list[idx2])
+            print('ndcg: ', ndcg_list[idx2])
+            print('phr: ', hr_list[idx2])
+            sys.stdout.flush()
+
+            print('max valid phr results:')
+            print('Epoch: ', idx3)
+            print('recall: ', recall_list[idx3])
+            print('ndcg: ', ndcg_list[idx3])
+            print('phr: ', hr_list[idx3])
+            sys.stdout.flush()
+
+
+            print("Retrained models")
+            valid_recall = []
+            valid_ndcg = []
+            valid_hr = []
+            recall_list = []
+            ndcg_list = []
+            hr_list = []
+            print('k = ' + str(i))
+            # only eval last epoch
+            for retrain_checkpoint_idx_to_match in range(4):
+                print(f"retrain_checkpoint_idx_to_match: {args.retrain_checkpoint_idx_to_match}")
+                retrain_str = f"_retrain_checkpoint_idx_to_match_{retrain_checkpoint_idx_to_match}"
+                encoder_pathes = './models/encoder_' + (model_version) + f'_model_best_seed_{seed}{retrain_str}'
+                decoder_pathes = './models/decoder_' + (model_version) + f'_model_best_seed_{seed}{retrain_str}'
+                if not os.path.exists(encoder_pathes) or not os.path.exists(decoder_pathes):
+                    print(f"Skip retrain_checkpoint_idx_to_match {retrain_checkpoint_idx_to_match}, no model found")
+                    continue
+                # encoder_pathes = './models/encoder' + str(model_version) + '_model_epoch' + str(model_epoch) + f'_seed_{seed}'
+                # decoder_pathes = './models/decoder' + str(model_version) + '_model_epoch' + str(model_epoch) + f'_seed_{seed}'
+                encoder_instance = torch.load(encoder_pathes, map_location=torch.device('cuda'), weights_only=False)
+                decoder_instance = torch.load(decoder_pathes, map_location=torch.device('cuda'), weights_only=False)
+
+                recall, ndcg, hr = evaluate(history_data, future_data, encoder_instance, decoder_instance, input_size,
+                                            val_key_set, next_k_step, i, test_flag=True, temporal_split=temporal_split)
+                valid_recall.append(recall)
+                valid_ndcg.append(ndcg)
+                valid_hr.append(hr)
+                recall, ndcg, hr = evaluate(history_data, future_data, encoder_instance, decoder_instance, input_size,
+                                            test_key_set, next_k_step, i, test_flag=True, temporal_split=temporal_split)
+                recall_list.append(recall)
+                ndcg_list.append(ndcg)
+                hr_list.append(hr)
+                valid_recall = np.asarray(valid_recall)
+                valid_ndcg = np.asarray(valid_ndcg)
+                valid_hr = np.asarray(valid_hr)
+                idx1 = valid_recall.argsort()[::-1][0]
+                idx2 = valid_ndcg.argsort()[::-1][0]
+                idx3 = valid_hr.argsort()[::-1][0]
+                print('max valid recall results:')
+                print('Epoch: ', idx1)
+                print('recall: ', recall_list[idx1])
+                print('ndcg: ', ndcg_list[idx1])
+                print('phr: ', hr_list[idx1])
+                sys.stdout.flush()
+
+                print('max valid ndcg results:')
+                print('Epoch: ', idx2)
+                print('recall: ', recall_list[idx2])
+                print('ndcg: ', ndcg_list[idx2])
+                print('phr: ', hr_list[idx2])
+                sys.stdout.flush()
+
+                print('max valid phr results:')
+                print('Epoch: ', idx3)
+                print('recall: ', recall_list[idx3])
+                print('ndcg: ', ndcg_list[idx3])
+                print('phr: ', hr_list[idx3])
+                sys.stdout.flush()
 
 
 
