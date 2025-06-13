@@ -28,7 +28,7 @@ labmda = 10
 MAX_LENGTH = 100
 learning_rate = 0.001
 print_val = 3000
-use_cuda = False#torch.cuda.is_available()
+use_cuda = torch.cuda.is_available()
 
 
 class EncoderRNN_new(nn.Module):

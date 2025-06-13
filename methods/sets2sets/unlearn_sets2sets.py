@@ -595,7 +595,7 @@ def unlearn_main():
     unlearning_fraction = args.unlearning_fraction
     method = args.method
     popular_percentage = args.popular_percentage
-    use_cuda = False#torch.cuda.is_available()
+    use_cuda = torch.cuda.is_available()
     unlearning_algorithm = args.unlearning_algorithm
     sensitive_category = args.sensitive_category
 
