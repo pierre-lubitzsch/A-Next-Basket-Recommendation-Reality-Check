@@ -194,6 +194,12 @@ def parse_args():
         default=None,
         help="which unlearning checkpoint should be taken as example to create the unlearning set (only take a subset of the unlearning set given)"
     )
+    parser.add_argument(
+        "--lissa_train_pair_count_scif",
+        type=int,
+        default=2048,
+        help="how many samples are used for lissa hessian estimation"
+    )
 
     return parser.parse_args()
 
@@ -458,6 +464,7 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
                 LOCAL=LOCAL,
                 temporal_split=temporal_split,
                 retain_pairs=retain_pairs,
+                train_pair_count=args.lissa_train_pair_count_scif,
             )
         else:
             print(f"Invalid unlearning algorithm: {unlearning_algorithm}.")
@@ -474,11 +481,11 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
             )
             torch.save(
                 encoder,
-                f"./models/unlearn_encoder_{model_name}_model_best_unlearn_epoch{i}_seed_{seed}{unlearn_str}"
+                f"./models/unlearn_encoder_{model_name}_model_best_unlearn_epoch{i}_seed_{seed}{unlearn_str}.pt"
             )
             torch.save(
                 decoder,
-                f"./models/unlearn_decoder_{model_name}_model_best_unlearn_epoch{i}_seed_{seed}{unlearn_str}"
+                f"./models/unlearn_decoder_{model_name}_model_best_unlearn_epoch{i}_seed_{seed}{unlearn_str}.pt"
             )
 
         print("elapsed {:.2f}s".format(time.perf_counter() - start_perf))
@@ -754,8 +761,8 @@ def unlearn_main():
     elif training == 2: # unlearn
         # load models to be unlearned
 
-        encoder_pathes = f'./models/encoder_{model_version}_model_best_seed_{seed}'
-        decoder_pathes = f'./models/decoder_{model_version}_model_best_seed_{seed}'
+        encoder_pathes = f'./models/encoder_{model_version}_model_best_seed_{seed}.pt'
+        decoder_pathes = f'./models/decoder_{model_version}_model_best_seed_{seed}.pt'
         # encoder_pathes = './models/encoder' + str(model_version) + '_model_epoch' + str(model_epoch) + f'_seed_{seed}'
         # decoder_pathes = './models/decoder' + str(model_version) + '_model_epoch' + str(model_epoch) + f'_seed_{seed}'
         encoder_instance = torch.load(encoder_pathes, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)

@@ -228,7 +228,7 @@ def scif_unlearn(
     scale=25.0,
     lissa_bs=16,
     retain_samples_used_for_update=32,
-    train_pair_count=256,
+    train_pair_count=2048,
 ):
     """
     One SCIF pass over *all* `unlearning_user_ids` at once (can be called in a
@@ -275,7 +275,7 @@ def scif_unlearn(
     unlearn_samples_corrected = [make_pair(u, False) for u in unlearning_user_ids]
 
     # need to sample retain pairs, otherwise it takes much too long
-    train_retain_pair_count = train_pair_count - len(unlearn_samples_corrected)
+    train_retain_pair_count = min(train_pair_count - len(unlearn_samples_corrected), len(retain_pairs))
     train_retain_pair_samples = random.sample(retain_pairs, k=train_retain_pair_count)
     train_pairs = unlearn_samples_corrected + train_retain_pair_samples
 

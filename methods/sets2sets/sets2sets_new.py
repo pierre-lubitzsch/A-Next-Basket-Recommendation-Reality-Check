@@ -384,17 +384,17 @@ def trainIters(data_history, data_future, output_size, encoder, decoder, model_n
         if recall>best_recall:
             best_recall=recall
             # print(pred_dict[user])
-            filepath = './models/encoder_' + (model_name) + f'_model_best_seed_{seed}{retrain_str}'
+            filepath = './models/encoder_' + (model_name) + f'_model_best_seed_{seed}{retrain_str}.pt'
             torch.save(encoder, filepath)
-            filepath = './models/decoder_' + (model_name) + f'_model_best_seed_{seed}{retrain_str}'
+            filepath = './models/decoder_' + (model_name) + f'_model_best_seed_{seed}{retrain_str}.pt'
             torch.save(decoder, filepath)
             print('Recall:', recall)
-            torch.save(encoder, f'./models/encoder_{model_name}_model_epoch{j}_seed_{seed}{retrain_str}')
-            torch.save(decoder, f'./models/decoder_{model_name}_model_epoch{j}_seed_{seed}{retrain_str}')
+            torch.save(encoder, f'./models/encoder_{model_name}_model_epoch{j}_seed_{seed}{retrain_str}.pt')
+            torch.save(decoder, f'./models/decoder_{model_name}_model_epoch{j}_seed_{seed}{retrain_str}.pt')
             print('Model is saved.')
         elif j == n_iters - 1:
-            torch.save(encoder, f'./models/encoder_{model_name}_model_epoch{j}_seed_{seed}{retrain_str}')
-            torch.save(decoder, f'./models/decoder_{model_name}_model_epoch{j}_seed_{seed}{retrain_str}')
+            torch.save(encoder, f'./models/encoder_{model_name}_model_epoch{j}_seed_{seed}{retrain_str}.pt')
+            torch.save(decoder, f'./models/decoder_{model_name}_model_epoch{j}_seed_{seed}{retrain_str}.pt')
             print('Model is saved.')
         print('Finish epoch: ' + str(j))
         
@@ -786,8 +786,8 @@ def main(argv):
             # only eval last epoch
             for model_epoch in range(num_iter):
                 print('Epoch: ', model_epoch)
-                encoder_pathes = f'./models/encoder_{model_version}_model_epoch{model_epoch}_seed_{seed}'
-                decoder_pathes = f'./models/decoder_{model_version}_model_epoch{model_epoch}_seed_{seed}'
+                encoder_pathes = f'./models/encoder_{model_version}_model_epoch{model_epoch}_seed_{seed}.pt'
+                decoder_pathes = f'./models/decoder_{model_version}_model_epoch{model_epoch}_seed_{seed}.pt'
                 if not os.path.exists(encoder_pathes) or not os.path.exists(decoder_pathes):
                     print(f"Skip epoch {model_epoch}, no new best model or last epoch")
                     continue
