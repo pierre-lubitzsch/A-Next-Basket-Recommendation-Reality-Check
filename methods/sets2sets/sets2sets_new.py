@@ -174,8 +174,8 @@ class AttnDecoderRNN_new(nn.Module):
         attn_applied = torch.bmm(attn_weights.unsqueeze(0),
                                  encoder_outputs.unsqueeze(0))
 
-        element_attn_weights = F.softmax(
-            self.attn1(torch.cat((history_context, hidden[0]), 1)), dim=1)
+        # element_attn_weights = F.softmax(
+        #     self.attn1(torch.cat((history_context, hidden[0]), 1)), dim=1)
 
         output = torch.cat((droped_ave_embedded[0], attn_applied[0]), 1)
         output = self.attn_combine(output).unsqueeze(0)

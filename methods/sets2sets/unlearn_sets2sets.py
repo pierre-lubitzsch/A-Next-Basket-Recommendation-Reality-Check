@@ -3,10 +3,24 @@ import sys
 import pickle
 import argparse
 import torch
+import scif
 
 
 
 
+def make_pair(u, sensitive_included, temporal_split, history_data, future_data, cur_clean_data_history_and_future):
+    if temporal_split:
+        if sensitive_included:
+            # training basket = last-3 in history
+            tgt = [[-1], history_data[u][-3], [-1]]
+            inp = history_data[u][:-3] + [[-1]]
+        else:  # clean sample
+            tgt = [[-1], cur_clean_data_history_and_future[u][-4], [-1]]
+            inp = cur_clean_data_history_and_future[u][:-4] + [[-1]]
+    else:
+        inp = history_data[u]
+        tgt = future_data[u]
+    return inp, tgt
 
 def print_progress(start, finished, total, loss_avg):
     """Pretty progress + ETA."""
@@ -161,7 +175,10 @@ def parse_args():
         "--unlearning_algorithm",
         type=str,
         default="neurips_competition_iterative_contrastive",
-        choices=["neurips_competition_iterative_contrastive",],
+        choices=[
+            "neurips_competition_iterative_contrastive",
+            "scif"
+        ],
         help="What unlearning algorithm is used."
     )
     parser.add_argument(
@@ -344,6 +361,7 @@ def random_shuffle(arr):
 def unlearnIters(data_history, data_future, output_size, encoder, decoder, model_name, training_key_set, val_keyset, retain_key_set, codes_inverse_freq, next_k_step,
                n_iters, top_k, seed, temporal_split, LOCAL, user_to_unlearning_items, unlearning_algorithm, constrastive_retain_batchsize=16, args=None):
     start = time.time()
+    start_perf = time.perf_counter()
     print_loss_total = 0  # Reset every print_every
     # elem_wise_connection.initWeight()
 
@@ -386,42 +404,86 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
     for user in retain_user_ids:
         clean_data_history_and_future[user] = data_history[user][:-1] + [data_future[user][1], [-1]]
 
-    if unlearning_algorithm == "neurips_competition_iterative_contrastive":
-        # unlearn sequentually per user and save every quarter of len(unlearning_user_ids)
-        n = len(unlearning_user_ids)
-        checkpoint_every = math.ceil(n / 4)
-        checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 5 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 5 and i == n - 1))]
-        if len(checkpoint_idxs) == 5:
-            checkpoint_idxs = checkpoint_idxs[:4] + [checkpoint_idxs[-1]]
+    # unlearn sequentually per user and save every quarter of len(unlearning_user_ids)
+    n = len(unlearning_user_ids)
+    checkpoint_every = math.ceil(n / 4)
+    checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 5 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 5 and i == n - 1))]
+    if len(checkpoint_idxs) == 5:
+        checkpoint_idxs = checkpoint_idxs[:4] + [checkpoint_idxs[-1]]
 
-        cur_clean_data_history_and_future = {u: baskets for u, baskets in clean_data_history_and_future.items() if u in retain_user_ids}
+    cur_clean_data_history_and_future = {u: baskets for u, baskets in clean_data_history_and_future.items() if u in retain_user_ids}
+    retain_pairs = [make_pair(u, True, temporal_split, data_history, data_future, cur_clean_data_history_and_future) for u in retain_user_ids]
 
-        for i, user in enumerate(sorted(unlearning_user_ids)):
-            print(f"\n\nunlearning items for user {i + 1}/{len(unlearning_user_ids)} with id: {user}\n\n")
-            cur_unlearning_user_ids = [user]
-            if user in clean_data_history_and_future.keys():
-                cur_clean_data_history_and_future[user] = clean_data_history_and_future[user]
-            unlearn_neurips_competition_iterative_contrastive(cur_unlearning_user_ids, retain_user_ids, cur_clean_data_history_and_future, data_history, data_future, encoder, decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer, criterion, output_size, start, n_iters, constrastive_retain_batchsize=constrastive_retain_batchsize, LOCAL=LOCAL, temporal_split=temporal_split, print_loss_total=print_loss_total, total_iter=total_iter, best_recall=best_recall)
-            if user in clean_data_history_and_future.keys():
-                del cur_clean_data_history_and_future[user]
+    for i, user in enumerate(sorted(unlearning_user_ids)):
+        print(f"\nunlearning items for user {i + 1}/{len(unlearning_user_ids)} with id: {user}\n")
+        cur_unlearning_user_ids = [user]
+        if user in clean_data_history_and_future.keys():
+            cur_clean_data_history_and_future[user] = clean_data_history_and_future[user]
 
-            if i in checkpoint_idxs:
-                unlearn_str = (
-                    f"_sensitive_category_{args.sensitive_category}"
-                    f"_unlearning_fraction_{args.unlearning_fraction}"
-                    f"_unlearning_algorithm_{args.unlearning_algorithm}"
-                )
-                torch.save(
-                    encoder,
-                    f"./models/unlearn_encoder_{model_name}_model_best_unlearn_epoch{i}_seed_{seed}{unlearn_str}"
-                )
-                torch.save(
-                    decoder,
-                    f"./models/unlearn_decoder_{model_name}_model_best_unlearn_epoch{i}_seed_{seed}{unlearn_str}"
-                )
-    else:
-        print(f"Invalid unlearning algorithm: {unlearning_algorithm}.")
-        exit(1)
+        if unlearning_algorithm == "neurips_competition_iterative_contrastive":
+            unlearn_neurips_competition_iterative_contrastive(
+                cur_unlearning_user_ids,
+                retain_user_ids,
+                cur_clean_data_history_and_future,
+                data_history,
+                data_future,
+                encoder,
+                decoder,
+                codes_inverse_freq,
+                encoder_optimizer,
+                decoder_optimizer,
+                criterion,
+                output_size,
+                start,
+                n_iters,
+                constrastive_retain_batchsize=constrastive_retain_batchsize,
+                LOCAL=LOCAL,
+                temporal_split=temporal_split,
+                print_loss_total=print_loss_total,
+                total_iter=total_iter,
+                best_recall=best_recall
+            )
+        elif unlearning_algorithm == "scif":
+            scif.scif_unlearn(
+                unlearning_user_ids=cur_unlearning_user_ids,
+                retain_user_ids=retain_user_ids,
+                cur_clean_data_history_and_future=cur_clean_data_history_and_future,
+                history_data=data_history,
+                future_data=data_future,
+                encoder=encoder,
+                decoder=decoder,
+                codes_inverse_freq=codes_inverse_freq,
+                criterion=criterion,
+                output_size=output_size,
+                LOCAL=LOCAL,
+                temporal_split=temporal_split,
+                retain_pairs=retain_pairs,
+            )
+        else:
+            print(f"Invalid unlearning algorithm: {unlearning_algorithm}.")
+            exit(1)
+
+        if user in clean_data_history_and_future.keys():
+            del cur_clean_data_history_and_future[user]
+
+        if i in checkpoint_idxs:
+            unlearn_str = (
+                f"_sensitive_category_{args.sensitive_category}"
+                f"_unlearning_fraction_{args.unlearning_fraction}"
+                f"_unlearning_algorithm_{args.unlearning_algorithm}"
+            )
+            torch.save(
+                encoder,
+                f"./models/unlearn_encoder_{model_name}_model_best_unlearn_epoch{i}_seed_{seed}{unlearn_str}"
+            )
+            torch.save(
+                decoder,
+                f"./models/unlearn_decoder_{model_name}_model_best_unlearn_epoch{i}_seed_{seed}{unlearn_str}"
+            )
+
+        print("elapsed {:.2f}s".format(time.perf_counter() - start_perf))
+        sys.stdout.flush()
+    
 
     
 
@@ -595,7 +657,7 @@ def unlearn_main():
     unlearning_fraction = args.unlearning_fraction
     method = args.method
     popular_percentage = args.popular_percentage
-    use_cuda = torch.cuda.is_available()
+    use_cuda = not LOCAL
     unlearning_algorithm = args.unlearning_algorithm
     sensitive_category = args.sensitive_category
 
