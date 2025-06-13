@@ -74,7 +74,7 @@ def _loss_forward(
 
 
 def _batch_grad(encoder, decoder, batch, param_list,
-                codes_inverse_freq, criterion, output_size, max_len, average=False, average_scale=None):
+                codes_inverse_freq, criterion, output_size, max_len, average=True, average_scale=None):
     average_scale = average_scale or len(batch)
     acc = [torch.zeros_like(p) for p in param_list]
     for inp, tgt in batch:
