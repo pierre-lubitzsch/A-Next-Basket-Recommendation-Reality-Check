@@ -248,10 +248,10 @@ def scif_unlearn(
                                codes_inverse_freq, criterion, output_size, max_len,
                                damping=damping, scale=scale, bs=lissa_bs, LOCAL=LOCAL)
 
-    tau = len(delete_pairs) / len(train_pairs)
+    tau = len(delete_pairs) / len(history_data)
     with torch.no_grad():
         for p, d in zip(param_list, inv_hvp):
             p -= tau * d
 
     print(f"[SCIF]  removed {len(delete_pairs)} baskets, "
-          f"tau={tau:.4f},  ||delta theta||={norm_list(inv_hvp)}")
+          f"tau={tau:.4f},  ||delta theta||={tau * norm_list(inv_hvp)}")
