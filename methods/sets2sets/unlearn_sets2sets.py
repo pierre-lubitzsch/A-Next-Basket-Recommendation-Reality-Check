@@ -471,7 +471,7 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
                 temporal_split=temporal_split,
                 retain_pairs=retain_pairs,
                 train_pair_count=args.lissa_train_pair_count_scif,
-                retain_samples_used_for_update_scif=args.retain_samples_used_for_update_scif,
+                retain_samples_used_for_update=args.retain_samples_used_for_update_scif,
             )
         else:
             print(f"Invalid unlearning algorithm: {unlearning_algorithm}.")
