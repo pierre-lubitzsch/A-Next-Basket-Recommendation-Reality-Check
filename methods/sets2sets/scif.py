@@ -1,13 +1,4 @@
-"""
-scif.py  –  “Second-order Contrastive Influence Functions” for Sets2Sets
-========================================================================
-
-Implements a one-shot approximate unlearning step that mimics full
-re-training up to second order, following the LiSSA inverse-HVP recipe
-from the DNNUnlearner (approx_retraining).
-"""
-
-import math, random, time
+import math, random
 from typing import List, Sequence, Tuple, Dict
 
 import numpy as np
@@ -17,9 +8,6 @@ from torch.autograd import Variable
 import random
 import tqdm
 
-# ----------------------------------------------------------------------
-#                   tiny helpers (vector ↔ param list)
-# ----------------------------------------------------------------------
 
 def list_to_vec(params: Sequence[torch.Tensor]) -> torch.Tensor:
     return torch.cat([p.reshape(-1) for p in params])
@@ -34,10 +22,6 @@ def vec_to_list(vec: torch.Tensor, like: Sequence[torch.Tensor]) -> List[torch.T
 
 def norm_list(plist: Sequence[torch.Tensor]) -> float:
     return torch.sqrt(sum(p.pow(2).sum() for p in plist)).item()
-
-# ----------------------------------------------------------------------
-#                       forward / gradient helpers
-# ----------------------------------------------------------------------
 
 def _loss_forward(
     encoder, decoder, input_var, target_var,
@@ -136,10 +120,6 @@ def _hvp_dataset(
             a /= bs
     return acc
 
-# ----------------------------------------------------------------------
-#                           LiSSA inverse-HVP
-# ----------------------------------------------------------------------
-
 def lissa_inv_hvp(
     encoder, decoder, train_data, v_list, param_list,
     codes_inverse_freq, criterion, output_size, max_len,
@@ -176,10 +156,6 @@ def lissa_inv_hvp(
     return cur_est, False   # never mark diverged for simplicity
 
 
-# ----------------------------------------------------------------------
-#                     get target parameters
-# ----------------------------------------------------------------------
-
 def target_params(encoder, decoder):
     enc, dec = [], []
 
@@ -203,11 +179,6 @@ def target_params(encoder, decoder):
     return enc + dec
 
 
-# ----------------------------------------------------------------------
-#                     public SCIF entry-point (called from
-#                     unlearn_sets2sets.py)
-# ----------------------------------------------------------------------
-
 def scif_unlearn(
     *,  # force kw-only for clarity
     unlearning_user_ids: List[str],
@@ -227,23 +198,10 @@ def scif_unlearn(
     damping=0.01,
     scale=25.0,
     lissa_bs=16,
-    retain_samples_used_for_update=32,
+    retain_samples_used_for_update=8,
     train_pair_count=2048,
 ):
-    """
-    One SCIF pass over *all* `unlearning_user_ids` at once (can be called in a
-    loop if you want per-user checkpoints).
 
-    Steps
-    -----
-    1.  Build two datasets:
-        • D_out  – baskets to delete   (from `unlearning_user_ids`)
-        • D_keep – retained baskets    (from `retain_user_ids`)
-    2.  diff  := ∑_{(x,y)∈D_out}  –∇θ ℓ(x,y)
-    3.  h_inv := LiSSA( H_train⁻¹ · diff )
-    4.  θ ← θ  –  τ · h_inv     (τ = |D_out| / |D_train|  as in paper)
-    """
-    # -------------- 1. build mini datasets -----------------------------
     def make_pair(u, sensitive_included):
         if temporal_split:
             if sensitive_included:
@@ -262,9 +220,7 @@ def scif_unlearn(
 
     delete_pairs = [make_pair(u, True) for u in unlearning_user_ids]
 
-    # full (or a large) train set for Hessian batches
 
-    # -------------- 2. ∑ –∇ℓ  over delete set --------------------------
     neg_grads = _batch_grad(encoder, decoder, delete_pairs, param_list,
                             codes_inverse_freq, criterion, output_size, max_len)
     
@@ -288,18 +244,14 @@ def scif_unlearn(
 
     grads = [n + p for n, p in zip(neg_grads, pos_grads)]
 
-    # -------------- 3. LiSSA inverse-HVP -------------------------------
     inv_hvp, _ = lissa_inv_hvp(encoder, decoder, train_pairs, grads, param_list,
                                codes_inverse_freq, criterion, output_size, max_len,
                                damping=damping, scale=scale, bs=lissa_bs, LOCAL=LOCAL)
 
-    # -------------- 4.  θ ← θ – τ·H⁻¹v ---------------------------------
     tau = len(delete_pairs) / len(train_pairs)
     with torch.no_grad():
         for p, d in zip(param_list, inv_hvp):
             p -= tau * d
 
     print(f"[SCIF]  removed {len(delete_pairs)} baskets, "
-          f"τ={tau:.4f},  ‖Δθ‖₂={norm_list(inv_hvp):.4e}")
-
-# ----------------------------------------------------------------------
+          f"tau={tau:.4f},  ||delta theta||={norm_list(inv_hvp)}")
