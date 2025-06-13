@@ -6,6 +6,20 @@ import torch
 
 
 
+
+
+def print_progress(start, finished, total, loss_avg):
+    """Pretty progress + ETA."""
+    elapsed = time.time() - start
+    pct     = finished / max(total, 1)
+    eta     = elapsed * (1 - pct) / max(pct, 1e-8)
+
+    def fmt(t): m, s = divmod(int(t), 60); return f"{m}m {s}s"
+    print(f"{fmt(elapsed)} (- {fmt(eta)}) "
+          f"({finished}/{total}  {pct*100:5.1f}%) "
+          f"{loss_avg:.6f}")
+
+
 # --- collect the model files we just trained ---------------------------
 def _find_trained_models(args, model_version, seed):
     """
@@ -379,10 +393,17 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
         checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 5 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 5 and i == n - 1))]
         if len(checkpoint_idxs) == 5:
             checkpoint_idxs = checkpoint_idxs[:4] + [checkpoint_idxs[-1]]
+
+        cur_clean_data_history_and_future = {u: baskets for u, baskets in clean_data_history_and_future.items() if u in retain_user_ids}
+
         for i, user in enumerate(sorted(unlearning_user_ids)):
+            print(f"\n\nunlearning items for user {user}\n\n")
             cur_unlearning_user_ids = [user]
-            cur_clean_data_history_and_future = {u: baskets for u, baskets in clean_data_history_and_future.items() if u in retain_user_ids or u == user}
+            if user in clean_data_history_and_future.keys():
+                cur_clean_data_history_and_future[user] = clean_data_history_and_future[user]
             unlearn_neurips_competition_iterative_contrastive(cur_unlearning_user_ids, retain_user_ids, cur_clean_data_history_and_future, data_history, data_future, encoder, decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer, criterion, output_size, start, n_iters, constrastive_retain_batchsize=constrastive_retain_batchsize, LOCAL=LOCAL, temporal_split=temporal_split, print_loss_total=print_loss_total, total_iter=total_iter, best_recall=best_recall)
+            if user in clean_data_history_and_future.keys():
+                del cur_clean_data_history_and_future[user]
 
             if i in checkpoint_idxs:
                 unlearn_str = (
@@ -405,8 +426,8 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
     
 
 
-def unlearn_neurips_competition_iterative_contrastive(unlearning_user_ids, retain_user_ids, clean_data_history_and_future, data_history, data_future, encoder, decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer, criterion, output_size, start, n_iters, constrastive_retain_batchsize=16, LOCAL=False, temporal_split=True, print_loss_total=0, total_iter=0, best_recall=0):
-    # train n_iters epoch
+def unlearn_neurips_competition_iterative_contrastive(unlearning_user_ids, retain_user_ids, clean_data_history_and_future, data_history, data_future, encoder, decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer, criterion, output_size, start, n_iters, constrastive_retain_batchsize=16, LOCAL=False, temporal_split=True, print_loss_total=0, total_iter=0, best_recall=0, unlearn_iters_contrastive = 8):
+    total_steps_expected = len(unlearning_user_ids) * (1 + unlearn_iters_contrastive + 10)
 
     print("First stage: learn uniform pseudolabel")
     # get a suffle list
@@ -441,11 +462,12 @@ def unlearn_neurips_competition_iterative_contrastive(unlearning_user_ids, retai
 
     print_loss_avg = print_loss_total / len(unlearning_user_ids)
     print_loss_total = 0
-    print('%s (%d %d%%) %.6f' % (timeSince(start, total_iter / (n_iters * len(unlearning_user_ids))), total_iter,
-                                total_iter / (n_iters * len(unlearning_user_ids)) * 100, print_loss_avg))
+    # print('%s (%d %d%%) %.6f' % (timeSince(start, total_iter / (n_iters * len(unlearning_user_ids))), total_iter,
+    #                             total_iter / (n_iters * len(unlearning_user_ids)) * 100, print_loss_avg))
+    # print_progress(start, total_iter, total_steps_expected, print_loss_avg)
+    print(f"average loss over {len(unlearning_user_ids)} sample{"s" if len(unlearning_user_ids) != 1 else ""}: {print_loss_avg}")
     sys.stdout.flush()
 
-    unlearn_iters_contrastive = 8
     print("Second stage: learn uniform pseudolabel")
     # Second stage: 
     for j in range(unlearn_iters_contrastive):
@@ -494,8 +516,10 @@ def unlearn_neurips_competition_iterative_contrastive(unlearning_user_ids, retai
         # print loss and save model
         print_loss_avg = print_loss_total / len(unlearning_user_ids)
         print_loss_total = 0
-        print('%s (%d %d%%) %.6f' % (timeSince(start, total_iter / (n_iters * len(unlearning_user_ids))), total_iter,
-                                    total_iter / (n_iters * len(unlearning_user_ids)) * 100, print_loss_avg))
+        # print('%s (%d %d%%) %.6f' % (timeSince(start, total_iter / (n_iters * len(unlearning_user_ids))), total_iter,
+        #                             total_iter / (n_iters * len(unlearning_user_ids)) * 100, print_loss_avg))
+        # print_progress(start, total_iter, total_steps_expected, print_loss_avg)
+        print(f"average loss over {len(unlearning_user_ids)} sample{"s" if len(unlearning_user_ids) != 1 else ""}: {print_loss_avg}")
         sys.stdout.flush()
 
 
@@ -503,9 +527,10 @@ def unlearn_neurips_competition_iterative_contrastive(unlearning_user_ids, retai
 
         print_loss_total = 0
         # use all user ids for retain round but filter out unlearned items from respective users basket histories and labels
-        retain_round_user_ids = list(clean_data_history_and_future.keys()) + retain_user_ids
+        retain_round_user_ids = list(clean_data_history_and_future.keys())
         retain_round_samples = 10 * len(unlearning_user_ids)
-        shuffled_users = unlearning_user_ids + random.sample(retain_round_user_ids, k=retain_round_samples - len(unlearning_user_ids))
+        clean_sample_users = [u for u in unlearning_user_ids if u in clean_data_history_and_future.keys()]
+        shuffled_users = clean_sample_users + random.sample(retain_round_user_ids, k=retain_round_samples - len(clean_sample_users))
 
         for iter in tqdm(range(retain_round_samples), disable=not LOCAL):
             user = shuffled_users[iter]
@@ -542,8 +567,10 @@ def unlearn_neurips_competition_iterative_contrastive(unlearning_user_ids, retai
         # print loss and save model
         print_loss_avg = print_loss_total / retain_round_samples
         print_loss_total = 0
-        print('%s (%d %d%%) %.6f' % (timeSince(start, total_iter / (n_iters * len(unlearning_user_ids))), total_iter,
-                                    total_iter / (n_iters * len(unlearning_user_ids)) * 100, print_loss_avg))
+        # print('%s (%d %d%%) %.6f' % (timeSince(start, total_iter / (n_iters * len(unlearning_user_ids))), total_iter,
+        #                             total_iter / (n_iters * len(unlearning_user_ids)) * 100, print_loss_avg))
+        # print_progress(start, total_iter, total_steps_expected, print_loss_avg)
+        print(f"average loss over {len(unlearning_user_ids)} sample{"s" if len(unlearning_user_ids) != 1 else ""}: {print_loss_avg}")
         sys.stdout.flush()
 
 
@@ -568,7 +595,7 @@ def unlearn_main():
     unlearning_fraction = args.unlearning_fraction
     method = args.method
     popular_percentage = args.popular_percentage
-    use_cuda = torch.cuda.is_available()
+    use_cuda = False#torch.cuda.is_available()
     unlearning_algorithm = args.unlearning_algorithm
     sensitive_category = args.sensitive_category
 
@@ -669,8 +696,8 @@ def unlearn_main():
         decoder_pathes = f'./models/decoder_{model_version}_model_best_seed_{seed}'
         # encoder_pathes = './models/encoder' + str(model_version) + '_model_epoch' + str(model_epoch) + f'_seed_{seed}'
         # decoder_pathes = './models/decoder' + str(model_version) + '_model_epoch' + str(model_epoch) + f'_seed_{seed}'
-        encoder_instance = torch.load(encoder_pathes, map_location=torch.device('cuda'), weights_only=False)
-        decoder_instance = torch.load(decoder_pathes, map_location=torch.device('cuda'), weights_only=False)
+        encoder_instance = torch.load(encoder_pathes, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
+        decoder_instance = torch.load(decoder_pathes, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
 
         unlearnIters(history_data, future_data, input_size, encoder_instance, attn_decoder, model_version, training_key_set, val_key_set, retain_key_set, weights,
                    next_k_step, num_iter, topk, seed, temporal_split, LOCAL, user_to_unlearning_items, unlearning_algorithm, args=args)
