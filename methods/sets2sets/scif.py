@@ -74,7 +74,8 @@ def _loss_forward(
 
 
 def _batch_grad(encoder, decoder, batch, param_list,
-                codes_inverse_freq, criterion, output_size, max_len, average=False):
+                codes_inverse_freq, criterion, output_size, max_len, average=False, average_scale=None):
+    average_scale = average_scale or len(batch)
     acc = [torch.zeros_like(p) for p in param_list]
     for inp, tgt in batch:
         loss = _loss_forward(encoder, decoder, inp, tgt,
@@ -83,9 +84,8 @@ def _batch_grad(encoder, decoder, batch, param_list,
         for a, g in zip(acc, grads):
             a += g.detach()
     if average:
-        bs = len(batch)
         for a in acc:
-            a /= bs
+            a /= average_scale
     return acc
 
 def _hvp_single(encoder, decoder, inp, tgt, v_list, param_list,
@@ -103,7 +103,7 @@ def _hvp_single(encoder, decoder, inp, tgt, v_list, param_list,
 def _hvp_dataset(
     encoder, decoder, data_batch,
     v_list, param_list,
-    codes_inverse_freq, criterion, output_size, max_len, average=False,
+    codes_inverse_freq, criterion, output_size, max_len, average=True,
 ):
     acc = [torch.zeros_like(p) for p in v_list]
     for inp, tgt in data_batch:
@@ -220,9 +220,10 @@ def scif_unlearn(
 
     delete_pairs = [make_pair(u, True) for u in unlearning_user_ids]
 
+    batch_size = retain_samples_used_for_update + len(unlearning_user_ids)
 
     neg_grads = _batch_grad(encoder, decoder, delete_pairs, param_list,
-                            codes_inverse_freq, criterion, output_size, max_len)
+                            codes_inverse_freq, criterion, output_size, max_len, average_scale=batch_size)
     
     # unlearn this
     neg_grads = [-g for g in neg_grads]
@@ -240,7 +241,7 @@ def scif_unlearn(
     retain_pairs_sampled = unlearn_samples_corrected + more_retain_samples_needed
 
     pos_grads = _batch_grad(encoder, decoder, retain_pairs_sampled, param_list,
-                            codes_inverse_freq, criterion, output_size, max_len)
+                            codes_inverse_freq, criterion, output_size, max_len, batch_size)
 
     grads = [n + p for n, p in zip(neg_grads, pos_grads)]
 
@@ -248,7 +249,7 @@ def scif_unlearn(
                                codes_inverse_freq, criterion, output_size, max_len,
                                damping=damping, scale=scale, bs=lissa_bs, LOCAL=LOCAL)
 
-    tau = len(delete_pairs) / len(history_data)
+    tau = batch_size / len(history_data)
     with torch.no_grad():
         for p, d in zip(param_list, inv_hvp):
             p -= tau * d
