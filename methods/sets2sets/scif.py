@@ -106,11 +106,10 @@ def _batch_grad(encoder, decoder, batch, param_list,
 
 def _hvp_single(encoder, decoder, inp, tgt, v_list, param_list,
                 codes_inverse_freq, criterion, output_size, max_len):
-    loss = _loss_forward(encoder, decoder, inp, tgt,
-                         codes_inverse_freq, criterion, output_size, max_len)
-    
     # second derivative not supported for RNNs when using cuDNN...
     with torch.backends.cudnn.flags(enabled=False):
+        loss = _loss_forward(encoder, decoder, inp, tgt,
+                         codes_inverse_freq, criterion, output_size, max_len)
         grad = torch.autograd.grad(loss, param_list, create_graph=True)
         dot  = sum((g * v).sum() for g, v in zip(grad, v_list))
         hv   = torch.autograd.grad(dot, param_list, retain_graph=False)
