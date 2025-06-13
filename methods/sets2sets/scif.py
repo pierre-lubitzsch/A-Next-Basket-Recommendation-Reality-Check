@@ -249,7 +249,7 @@ def scif_unlearn(
                                codes_inverse_freq, criterion, output_size, max_len,
                                damping=damping, scale=scale, bs=lissa_bs, LOCAL=LOCAL)
 
-    tau = batch_size / len(history_data)
+    tau = 1 / len(history_data)
     with torch.no_grad():
         for p, d in zip(param_list, inv_hvp):
             p -= tau * d
