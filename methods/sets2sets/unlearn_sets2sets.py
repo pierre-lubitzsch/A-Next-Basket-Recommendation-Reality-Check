@@ -397,7 +397,7 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
         cur_clean_data_history_and_future = {u: baskets for u, baskets in clean_data_history_and_future.items() if u in retain_user_ids}
 
         for i, user in enumerate(sorted(unlearning_user_ids)):
-            print(f"\n\nunlearning items for user {user}\n\n")
+            print(f"\n\nunlearning items for user {i + 1}/{len(unlearning_user_ids)} with id: {user}\n\n")
             cur_unlearning_user_ids = [user]
             if user in clean_data_history_and_future.keys():
                 cur_clean_data_history_and_future[user] = clean_data_history_and_future[user]
