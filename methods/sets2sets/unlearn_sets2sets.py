@@ -761,7 +761,7 @@ def unlearn_main():
         encoder_instance = torch.load(encoder_pathes, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
         decoder_instance = torch.load(decoder_pathes, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
 
-        unlearnIters(history_data, future_data, input_size, encoder_instance, attn_decoder, model_version, training_key_set, val_key_set, retain_key_set, weights,
+        unlearnIters(history_data, future_data, input_size, encoder_instance, decoder_instance, model_version, training_key_set, val_key_set, retain_key_set, weights,
                    next_k_step, num_iter, topk, seed, temporal_split, LOCAL, user_to_unlearning_items, unlearning_algorithm, args=args)
     
     encs, decs = _find_trained_models(args, model_version, seed)
