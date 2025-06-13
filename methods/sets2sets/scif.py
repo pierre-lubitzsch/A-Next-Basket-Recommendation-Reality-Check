@@ -245,9 +245,18 @@ def scif_unlearn(
 
     grads = [n + p for n, p in zip(neg_grads, pos_grads)]
 
-    inv_hvp, _ = lissa_inv_hvp(encoder, decoder, train_pairs, grads, param_list,
-                               codes_inverse_freq, criterion, output_size, max_len,
-                               damping=damping, scale=scale, bs=lissa_bs, LOCAL=LOCAL)
+    # inv_hvp, _ = lissa_inv_hvp(encoder, decoder, train_pairs, grads, param_list,
+    #                            codes_inverse_freq, criterion, output_size, max_len,
+    #                            damping=damping, scale=scale, bs=lissa_bs, LOCAL=LOCAL)
+
+    inv_hvp, _ = cg_inv_hvp(
+        encoder, decoder, train_pairs, grads, param_list,
+        codes_inverse_freq, criterion, output_size, max_len,
+        damping=damping,           # reuse existing kwargs
+        bs=lissa_bs,               # same mini‑batch size
+        LOCAL=LOCAL,
+    )
+
 
     tau = 1 / len(history_data)
     with torch.no_grad():
@@ -256,3 +265,86 @@ def scif_unlearn(
 
     print(f"[SCIF]  removed {len(delete_pairs)} baskets, "
           f"tau={tau:.4f},  ||delta theta||={tau * norm_list(inv_hvp)}")
+
+
+
+# conjugate gradients:
+
+###############################################################################
+#           Conjugate‑gradients inverse‑Hessian‑vector product                #
+###############################################################################
+
+def _dot_list(a: Sequence[torch.Tensor], b: Sequence[torch.Tensor]) -> torch.Tensor:
+    """⟨a,b⟩ for lists of tensors (returned as a scalar tensor on the same device)."""
+    return sum((x * y).sum() for x, y in zip(a, b))
+
+
+def _add_scaled(x: Sequence[torch.Tensor],
+                y: Sequence[torch.Tensor],
+                alpha: float) -> List[torch.Tensor]:
+    """x + α·y (list form, no gradients kept)."""
+    return [xi + alpha * yi for xi, yi in zip(x, y)]
+
+
+def cg_inv_hvp(
+    encoder, decoder,                             # models
+    train_data: List[Tuple],                      # data used to build H
+    v_list: Sequence[torch.Tensor],               # right‑hand side ‘v’
+    param_list: Sequence[torch.Tensor],           # θ we differentiate w.r.t.
+    codes_inverse_freq, criterion, output_size, max_len,
+    damping: float = 0.01,                        # λ – Tikhonov damping
+    bs: int = 16,                                 # mini‑batch size for H·p
+    max_iter: int | None = None,
+    tol: float = 1e-5,
+    LOCAL: bool = False,
+):
+    """
+    Solve  (H + λI) x = v  for x with conjugate gradients.
+    Returns: (x, diverged_flag)
+    """
+    # Total number of iterations: one pass over the data by default
+    max_iter = max_iter or math.ceil(len(train_data) / bs)
+
+    # --- initialisation ------------------------------------------------------
+    x      = [torch.zeros_like(v) for v in v_list]   # x₀
+    r      = [v.clone() for v in v_list]             # r₀ = v − Hx₀  (Hx₀ = 0)
+    p      = [ri.clone() for ri in r]                # p₀ = r₀
+    rs_old = _dot_list(r, r).item()
+
+    for k in tqdm.tqdm(range(max_iter), disable=not LOCAL):
+        # ---------------------------------------------------------------------
+        # Compute  q = (H + λI)·p  using stochastic HVP on a mini‑batch
+        # ---------------------------------------------------------------------
+        idx   = [random.randrange(len(train_data)) for _ in range(bs)]
+        batch = [train_data[i] for i in idx]
+
+        q = _hvp_dataset(
+            encoder, decoder, batch,
+            p, param_list,
+            codes_inverse_freq, criterion, output_size, max_len,
+            average=True,
+        )
+        # add λI term
+        q = [qi + damping * pi for qi, pi in zip(q, p)]
+
+        # ---------------------------------------------------------------------
+        alpha = rs_old / _dot_list(p, q).item()
+
+        # x_{k+1}  =  x_k + α p_k
+        x = _add_scaled(x, p, alpha)
+
+        # r_{k+1}  =  r_k − α q
+        r = _add_scaled(r, q, -alpha)
+
+        rs_new = _dot_list(r, r).item()
+        if math.sqrt(rs_new) < tol:
+            break  # converged
+
+        beta = rs_new / rs_old
+
+        # p_{k+1}  =  r_{k+1} + β p_k
+        p = [ri + beta * pi for ri, pi in zip(r, p)]
+        rs_old = rs_new
+
+    diverged = math.sqrt(rs_old) >= tol
+    return x, diverged

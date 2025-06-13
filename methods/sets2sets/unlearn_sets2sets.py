@@ -48,8 +48,8 @@ def _find_trained_models(args, model_version, seed):
             f"_unlearning_fraction_{args.unlearning_fraction}"
             f"_retrain_checkpoint_idx_to_match_{args.retrain_checkpoint_idx_to_match}"
         )
-        enc = f"./models/encoder_{model_version}_model_best_seed_{seed}{retrain_tag}"
-        dec = f"./models/decoder_{model_version}_model_best_seed_{seed}{retrain_tag}"
+        enc = f"./models/encoder_{model_version}_model_best_seed_{seed}{retrain_tag}.pt"
+        dec = f"./models/decoder_{model_version}_model_best_seed_{seed}{retrain_tag}.pt"
         if os.path.exists(enc) and os.path.exists(dec):
             enc_paths.append(enc)
             dec_paths.append(dec)
@@ -61,8 +61,9 @@ def _find_trained_models(args, model_version, seed):
             f"_unlearning_algorithm_{args.unlearning_algorithm}"
         )
         pattern = f"unlearn_encoder_{model_version}_model_best_unlearn_epoch"
+        print(pattern)
         for fname in sorted(os.listdir("./models")):
-            if fname.startswith(pattern) and fname.endswith(f"_seed_{seed}{unlearn_tag}"):
+            if fname.startswith(pattern) and fname.endswith(f"_seed_{seed}{unlearn_tag}.pt"):
                 epoch = fname.split("unlearn_epoch")[1].split("_")[0]
                 enc = f"./models/{fname}"
                 dec = enc.replace("unlearn_encoder_", "unlearn_decoder_")
@@ -89,8 +90,8 @@ def _evaluate_and_print(paths, history_data, future_data, input_size,
         for idx, (enc_p, dec_p) in enumerate(paths):
             print(f"[{idx}] Model {os.path.basename(enc_p)}")
 
-            encoder = torch.load(enc_p, map_location=torch.device("cuda"), weights_only=False)
-            decoder = torch.load(dec_p, map_location=torch.device("cuda"), weights_only=False)
+            encoder = torch.load(enc_p, map_location=torch.device("cuda" if use_cuda else "cpu"), weights_only=False)
+            decoder = torch.load(dec_p, map_location=torch.device("cuda" if use_cuda else "cpu"), weights_only=False)
 
             with torch.no_grad():
                 val_metrics  = evaluate(history_data, future_data, encoder, decoder,
@@ -480,7 +481,7 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
         if user in clean_data_history_and_future.keys():
             del cur_clean_data_history_and_future[user]
 
-        if i in checkpoint_idxs:
+        if i in checkpoint_idxs or i in [0, 1]:
             unlearn_str = (
                 f"_sensitive_category_{args.sensitive_category}"
                 f"_unlearning_fraction_{args.unlearning_fraction}"
