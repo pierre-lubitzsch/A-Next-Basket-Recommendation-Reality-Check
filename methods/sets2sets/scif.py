@@ -198,8 +198,8 @@ def scif_unlearn(
     damping=0.01,
     scale=25.0,
     lissa_bs=16,
-    retain_samples_used_for_update=8,
-    train_pair_count=2048,
+    retain_samples_used_for_update=128,
+    train_pair_count=1024,
 ):
 
     def make_pair(u, sensitive_included):

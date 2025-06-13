@@ -197,8 +197,14 @@ def parse_args():
     parser.add_argument(
         "--lissa_train_pair_count_scif",
         type=int,
-        default=2048,
+        default=1024,
         help="how many samples are used for lissa hessian estimation"
+    )
+    parser.add_argument(
+        "--retain_samples_used_for_update_scif",
+        type=int,
+        default=128,
+        help="how many samples are used in the HVP Hv inside v (v is the avg of the gradients of the unlearn sample, the cleaned one and some retain samples)"
     )
 
     return parser.parse_args()
@@ -465,6 +471,7 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
                 temporal_split=temporal_split,
                 retain_pairs=retain_pairs,
                 train_pair_count=args.lissa_train_pair_count_scif,
+                retain_samples_used_for_update_scif=args.retain_samples_used_for_update_scif,
             )
         else:
             print(f"Invalid unlearning algorithm: {unlearning_algorithm}.")
