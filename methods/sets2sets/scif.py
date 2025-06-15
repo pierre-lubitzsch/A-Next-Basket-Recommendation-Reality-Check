@@ -229,7 +229,7 @@ def scif_unlearn(
     neg_grads = [-g for g in neg_grads]
     
     # learn this (retain set and modified sample without sensitive items)
-    unlearn_samples_corrected = [make_pair(u, False) for u in unlearning_user_ids]
+    unlearn_samples_corrected = [make_pair(u, False) for u in unlearning_user_ids if u in cur_clean_data_history_and_future]
 
     # need to sample retain pairs, otherwise it takes much too long
     train_retain_pair_count = min(train_pair_count - len(unlearn_samples_corrected), len(retain_pairs))
