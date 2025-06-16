@@ -237,7 +237,7 @@ class custom_MultiLabelLoss_torch(nn.modules.loss._Loss):
         return loss
 
 def train(input_variable, target_variable, encoder, decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer,
-          criterion, output_size, max_length=MAX_LENGTH):
+          criterion, output_size, max_length=MAX_LENGTH, param_grads_to_scale=None, scale_for_params=1):
     encoder_hidden = encoder.initHidden()
 
     encoder_optimizer.zero_grad()
@@ -285,6 +285,12 @@ def train(input_variable, target_variable, encoder, decoder, codes_inverse_freq,
 
     loss = criterion(decoder_output, target, weights)
     loss.backward()
+
+    # different learning rate for certain parameters if we give a list of parameters to scale differently
+    if param_grads_to_scale is not None:
+        for param in param_grads_to_scale:
+            if param.grad is not None:
+                param.grad.mul_(scale_for_params)
 
     encoder_optimizer.step()
     decoder_optimizer.step()

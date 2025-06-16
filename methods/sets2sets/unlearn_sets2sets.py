@@ -4,7 +4,7 @@ import pickle
 import argparse
 import torch
 import scif
-
+import kookmin
 
 
 
@@ -175,10 +175,11 @@ def parse_args():
     parser.add_argument(
         "--unlearning_algorithm",
         type=str,
-        default="neurips_competition_iterative_contrastive",
+        default="scif",
         choices=[
             "neurips_competition_iterative_contrastive",
-            "scif"
+            "scif",
+            "kookmin",
         ],
         help="What unlearning algorithm is used."
     )
@@ -206,6 +207,12 @@ def parse_args():
         type=int,
         default=128,
         help="how many samples are used in the HVP Hv inside v (v is the avg of the gradients of the unlearn sample, the cleaned one and some retain samples)"
+    )
+    parser.add_argument(
+        "--kookmin_init_rate",
+        type=float,
+        default=0.01,
+        help="percentage of parameters getting reset in the kookmin unlearning algorithm",
     )
 
     return parser.parse_args()
@@ -427,6 +434,13 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
     cur_clean_data_history_and_future = {u: baskets for u, baskets in clean_data_history_and_future.items() if u in retain_user_ids}
     retain_pairs = [make_pair(u, True, temporal_split, data_history, data_future, cur_clean_data_history_and_future) for u in retain_user_ids]
 
+    # needed for kookmin
+    param_list = [p for p in encoder.parameters()
+            if p.requires_grad] + \
+            [p for p in decoder.parameters()
+            if p.requires_grad]
+    param_index = {id(p): i for i,p in enumerate(param_list)}
+
     for i, user in enumerate(sorted(unlearning_user_ids)):
         print(f"\nunlearning items for user {i + 1}/{len(unlearning_user_ids)} with id: {user}\n")
         cur_unlearning_user_ids = [user]
@@ -474,6 +488,28 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
                 train_pair_count=args.lissa_train_pair_count_scif,
                 retain_samples_used_for_update=args.retain_samples_used_for_update_scif,
             )
+        elif unlearning_algorithm == "kookmin":
+            kookmin.unlearn_by_reinit_and_finetune(
+                unlearning_user_ids=cur_unlearning_user_ids,
+                retain_user_ids=retain_user_ids,
+                cur_clean_data_history_and_future=cur_clean_data_history_and_future,
+                history_data=data_history,
+                future_data=data_future,
+                encoder=encoder,
+                decoder=decoder,
+                codes_inverse_freq=codes_inverse_freq,
+                criterion=criterion,
+                output_size=output_size,
+                LOCAL=LOCAL,
+                temporal_split=temporal_split,
+                retain_pairs=retain_pairs,
+                encoder_optimizer=encoder_optimizer,
+                decoder_optimizer=decoder_optimizer,
+                kookmin_init_rate=args.kookmin_init_rate,
+                device=torch.device("cuda" if use_cuda else "cpu"),
+                param_list=param_list,
+                param_index=param_index,
+            )
         else:
             print(f"Invalid unlearning algorithm: {unlearning_algorithm}.")
             exit(1)
@@ -481,7 +517,7 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
         if user in clean_data_history_and_future.keys():
             del cur_clean_data_history_and_future[user]
 
-        if i in checkpoint_idxs or i in [0, 1]:
+        if i in checkpoint_idxs:
             unlearn_str = (
                 f"_sensitive_category_{args.sensitive_category}"
                 f"_unlearning_fraction_{args.unlearning_fraction}"
