@@ -5,108 +5,9 @@ import argparse
 import torch
 import scif
 import kookmin
+import fanchuan
 
 
-
-def make_pair(u, sensitive_included, temporal_split, history_data, future_data, cur_clean_data_history_and_future):
-    if temporal_split:
-        if sensitive_included:
-            # training basket = last-3 in history
-            tgt = [[-1], history_data[u][-3], [-1]]
-            inp = history_data[u][:-3] + [[-1]]
-        else:  # clean sample
-            tgt = [[-1], cur_clean_data_history_and_future[u][-4], [-1]]
-            inp = cur_clean_data_history_and_future[u][:-4] + [[-1]]
-    else:
-        inp = history_data[u]
-        tgt = future_data[u]
-    return inp, tgt
-
-def print_progress(start, finished, total, loss_avg):
-    """Pretty progress + ETA."""
-    elapsed = time.time() - start
-    pct     = finished / max(total, 1)
-    eta     = elapsed * (1 - pct) / max(pct, 1e-8)
-
-    def fmt(t): m, s = divmod(int(t), 60); return f"{m}m {s}s"
-    print(f"{fmt(elapsed)} (- {fmt(eta)}) "
-          f"({finished}/{total}  {pct*100:5.1f}%) "
-          f"{loss_avg:.6f}")
-
-
-# --- collect the model files we just trained ---------------------------
-def _find_trained_models(args, model_version, seed):
-    """
-    Returns two equal-length lists with encoder/decoder paths
-    created in *this* run, in ascending epoch order.
-    """
-    enc_paths, dec_paths = [], []
-
-    if args.training == 1:                                    # retraining
-        retrain_tag = (
-            f"_sensitive_category_{args.sensitive_category}"
-            f"_unlearning_fraction_{args.unlearning_fraction}"
-            f"_retrain_checkpoint_idx_to_match_{args.retrain_checkpoint_idx_to_match}"
-        )
-        enc = f"./models/encoder_{model_version}_model_best_seed_{seed}{retrain_tag}.pt"
-        dec = f"./models/decoder_{model_version}_model_best_seed_{seed}{retrain_tag}.pt"
-        if os.path.exists(enc) and os.path.exists(dec):
-            enc_paths.append(enc)
-            dec_paths.append(dec)
-
-    elif args.training == 2:                                  # unlearning
-        unlearn_tag = (
-            f"_sensitive_category_{args.sensitive_category}"
-            f"_unlearning_fraction_{args.unlearning_fraction}"
-            f"_unlearning_algorithm_{args.unlearning_algorithm}"
-        )
-        pattern = f"unlearn_encoder_{model_version}_model_best_unlearn_epoch"
-        print(pattern)
-        for fname in sorted(os.listdir("./models")):
-            if fname.startswith(pattern) and fname.endswith(f"_seed_{seed}{unlearn_tag}.pt"):
-                epoch = fname.split("unlearn_epoch")[1].split("_")[0]
-                enc = f"./models/{fname}"
-                dec = enc.replace("unlearn_encoder_", "unlearn_decoder_")
-                if os.path.exists(dec):
-                    enc_paths.append(enc)
-                    dec_paths.append(dec)
-
-    return enc_paths, dec_paths
-# ---------------------------------------------------------------------------
-
-
-# --- generic evaluation routine --------------------------------------
-def _evaluate_and_print(paths, history_data, future_data, input_size,
-                        val_users, test_users, next_k_step,
-                        topk_list, temporal_split):
-    """
-    paths: list[(encoder_path, decoder_path)]
-    prints results for every (enc, dec) pair found in *paths*.
-    """
-    for k in topk_list:
-        print("=" * 80)
-        print(f" Top-{k} evaluation")
-        print("=" * 80)
-        for idx, (enc_p, dec_p) in enumerate(paths):
-            print(f"[{idx}] Model {os.path.basename(enc_p)}")
-
-            encoder = torch.load(enc_p, map_location=torch.device("cuda" if use_cuda else "cpu"), weights_only=False)
-            decoder = torch.load(dec_p, map_location=torch.device("cuda" if use_cuda else "cpu"), weights_only=False)
-
-            with torch.no_grad():
-                val_metrics  = evaluate(history_data, future_data, encoder, decoder,
-                                        input_size, val_users,  next_k_step, k,
-                                        test_flag=True, temporal_split=temporal_split)
-                test_metrics = evaluate(history_data, future_data, encoder, decoder,
-                                        input_size, test_users, next_k_step, k,
-                                        test_flag=True, temporal_split=temporal_split)
-
-            vr, vn, vh  = val_metrics
-            tr, tn, th  = test_metrics
-            print(f"  • VAL   – Recall:{vr:.4f}  NDCG:{vn:.4f}  HR:{vh:.4f}")
-            print(f"  • TEST  – Recall:{tr:.4f}  NDCG:{tn:.4f}  HR:{th:.4f}")
-        print()  # blank line after each k
-# ---------------------------------------------------------------------------
 
 
 
@@ -219,161 +120,108 @@ def parse_args():
 
 
 
-def kl_loss_sym(x, y):
-    kl_loss = torch.nn.KLDivLoss(reduction='batchmean')
-    # kl_loss expects the first parameter to be model outputs as log probabilities and the target to be "normal" probabilities
-    return kl_loss(torch.log(x + 1e-20), y)
+
+def make_pair(u, sensitive_included, temporal_split, history_data, future_data, cur_clean_data_history_and_future):
+    if temporal_split:
+        if sensitive_included:
+            # training basket = last-3 in history
+            tgt = [[-1], history_data[u][-3], [-1]]
+            inp = history_data[u][:-3] + [[-1]]
+        else:  # clean sample
+            tgt = [[-1], cur_clean_data_history_and_future[u][-4], [-1]]
+            inp = cur_clean_data_history_and_future[u][:-4] + [[-1]]
+    else:
+        inp = history_data[u]
+        tgt = future_data[u]
+    return inp, tgt
+
+def print_progress(start, finished, total, loss_avg):
+    """Pretty progress + ETA."""
+    elapsed = time.time() - start
+    pct     = finished / max(total, 1)
+    eta     = elapsed * (1 - pct) / max(pct, 1e-8)
+
+    def fmt(t): m, s = divmod(int(t), 60); return f"{m}m {s}s"
+    print(f"{fmt(elapsed)} (- {fmt(eta)}) "
+          f"({finished}/{total}  {pct*100:5.1f}%) "
+          f"{loss_avg:.6f}")
 
 
-def unlearn_iterative_uniform_distribution(input_variable, encoder, decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer,
-          criterion, output_size, max_length=MAX_LENGTH):
-    encoder_hidden = encoder.initHidden()
-
-    encoder_optimizer.zero_grad()
-    decoder_optimizer.zero_grad()
-
-    input_length = len(input_variable)
-
-    encoder_outputs = Variable(torch.zeros(max_length, encoder.hidden_size))
-    if use_cuda:
-        encoder_outputs = encoder_outputs.cuda()
-
-    history_record = np.zeros(output_size)
-    for ei in range(input_length - 1):
-        if ei == 0: #because first basket in input variable is [-1]
-            continue
-        for ele in input_variable[ei]:
-            history_record[ele] += 1.0 / (input_length - 2)
-
-    for ei in range(input_length - 1):
-        if ei == 0:
-            continue
-        encoder_output, encoder_hidden = encoder(input_variable[ei], encoder_hidden)
-        encoder_outputs[ei - 1] = encoder_output[0][0]
-
-    last_input = input_variable[input_length - 2]
-    decoder_hidden = encoder_hidden
-    last_hidden = encoder_hidden
-    decoder_input = last_input
-
-    decoder_output, decoder_hidden, decoder_attention = decoder(
-        decoder_input, decoder_hidden, encoder_outputs, history_record, last_hidden)
-
-    #create target tensor.
-    uniform_label = torch.ones_like(decoder_output) / output_size
-    if use_cuda:
-        uniform_label = uniform_label.cuda()
-    uniform_target = Variable(torch.tensor(uniform_label, dtype=torch.float32).reshape(1, -1))
-
-    if use_cuda:
-        uniform_target = uniform_target.cuda()
-    # weights = Variable(torch.FloatTensor(codes_inverse_freq).reshape(1, -1))
-    # if use_cuda:
-    #     weights = weights.cuda()
-
-    loss = kl_loss_sym(decoder_output, uniform_target)
-    loss.backward()
-
-    encoder_optimizer.step()
-    decoder_optimizer.step()
-
-    return loss.item()
-
-
-
-
-
-def unlearn_iterative_contrastive(unlearn_variable_batch, retain_variable_batch, encoder, decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer,
-          criterion, output_size, max_length=MAX_LENGTH):
-    encoder_optimizer.zero_grad()
-
-    unlearn_encoder_batch_outputs = []
-    retain_encoder_batch_outputs = []
-
-    for unlearn_variable in unlearn_variable_batch:
-        encoder_hidden = encoder.initHidden()
-        input_length = len(unlearn_variable)
-        encoder_outputs = Variable(torch.zeros(max_length, encoder.hidden_size))
-        if use_cuda:
-            encoder_outputs = encoder_outputs.cuda()
-
-        history_record = np.zeros(output_size)
-        for ei in range(input_length - 1):
-            if ei == 0: #because first basket in input variable is [-1]
-                continue
-            for ele in unlearn_variable[ei]:
-                history_record[ele] += 1.0 / (input_length - 2)
-
-        for ei in range(input_length - 1):
-            if ei == 0:
-                continue
-            encoder_output, encoder_hidden = encoder(unlearn_variable[ei], encoder_hidden)
-            encoder_outputs[ei - 1] = encoder_output[0][0]
-        
-        seq_rep = encoder_outputs[: input_length-1, :] # shape: (input_length-1, hidden_size)
-        pooled = seq_rep.mean(dim=0) # shape: (hidden_size,)
-        unlearn_encoder_batch_outputs.append(pooled)
-    
-
-    for retain_variable in retain_variable_batch:
-        encoder_hidden = encoder.initHidden()
-        input_length = len(retain_variable)
-        encoder_outputs = Variable(torch.zeros(max_length, encoder.hidden_size))
-        if use_cuda:
-            encoder_outputs = encoder_outputs.cuda()
-
-        history_record = np.zeros(output_size)
-        for ei in range(input_length - 1):
-            if ei == 0: #because first basket in input variable is [-1]
-                continue
-            for ele in retain_variable[ei]:
-                history_record[ele] += 1.0 / (input_length - 2)
-
-        for ei in range(input_length - 1):
-            if ei == 0:
-                continue
-            encoder_output, encoder_hidden = encoder(retain_variable[ei], encoder_hidden)
-            encoder_outputs[ei - 1] = encoder_output[0][0]
-        
-        seq_rep = encoder_outputs[: input_length-1, :] # shape: (input_length-1, hidden_size)
-        pooled = seq_rep.mean(dim=0) # shape: (hidden_size,)
-
-        retain_encoder_batch_outputs.append(pooled)
-
-    unlearn_encoder_batch_outputs = torch.stack(unlearn_encoder_batch_outputs)
-    retain_encoder_batch_outputs = torch.stack(retain_encoder_batch_outputs)
-
-    if use_cuda:
-        unlearn_encoder_batch_outputs = unlearn_encoder_batch_outputs.cuda()
-        retain_encoder_batch_outputs = retain_encoder_batch_outputs.cuda()
-
-    t = 1.15 # temperature
-    loss = (-1 * nn.LogSoftmax(dim=-1)(unlearn_encoder_batch_outputs @ retain_encoder_batch_outputs.T / t)).mean()
-    loss.backward()
-
-    encoder_optimizer.step()
-
-    return loss.item()
-
-
-
-
-def random_shuffle(arr):
+# --- collect the model files we just trained ---------------------------
+def _find_trained_models(args, model_version, seed):
     """
-    input:
-        arr: any sequence
-    
-    output:
-        random permutation of arr
+    Returns two equal-length lists with encoder/decoder paths
+    created in *this* run, in ascending epoch order.
     """
+    enc_paths, dec_paths = [], []
 
-    arr_permutation = np.random.permutation(len(arr))
-    shuffled_arr = []
+    if args.training == 1:                                    # retraining
+        retrain_tag = (
+            f"_sensitive_category_{args.sensitive_category}"
+            f"_unlearning_fraction_{args.unlearning_fraction}"
+            f"_retrain_checkpoint_idx_to_match_{args.retrain_checkpoint_idx_to_match}"
+        )
+        enc = f"./models/encoder_{model_version}_model_best_seed_{seed}{retrain_tag}.pt"
+        dec = f"./models/decoder_{model_version}_model_best_seed_{seed}{retrain_tag}.pt"
+        if os.path.exists(enc) and os.path.exists(dec):
+            enc_paths.append(enc)
+            dec_paths.append(dec)
 
-    for idx in arr_permutation:
-        shuffled_arr.append(arr[idx])
-    
-    return shuffled_arr
+    elif args.training == 2:                                  # unlearning
+        unlearn_tag = (
+            f"_sensitive_category_{args.sensitive_category}"
+            f"_unlearning_fraction_{args.unlearning_fraction}"
+            f"_unlearning_algorithm_{args.unlearning_algorithm}"
+        )
+        pattern = f"unlearn_encoder_{model_version}_model_best_unlearn_epoch"
+        print(pattern)
+        for fname in sorted(os.listdir("./models")):
+            if fname.startswith(pattern) and fname.endswith(f"_seed_{seed}{unlearn_tag}.pt"):
+                epoch = fname.split("unlearn_epoch")[1].split("_")[0]
+                enc = f"./models/{fname}"
+                dec = enc.replace("unlearn_encoder_", "unlearn_decoder_")
+                if os.path.exists(dec):
+                    enc_paths.append(enc)
+                    dec_paths.append(dec)
+
+    return enc_paths, dec_paths
+# ---------------------------------------------------------------------------
+
+
+# --- generic evaluation routine --------------------------------------
+def _evaluate_and_print(paths, history_data, future_data, input_size,
+                        val_users, test_users, next_k_step,
+                        topk_list, temporal_split):
+    """
+    paths: list[(encoder_path, decoder_path)]
+    prints results for every (enc, dec) pair found in *paths*.
+    """
+    for k in topk_list:
+        print("=" * 80)
+        print(f" Top-{k} evaluation")
+        print("=" * 80)
+        for idx, (enc_p, dec_p) in enumerate(paths):
+            print(f"[{idx}] Model {os.path.basename(enc_p)}")
+
+            encoder = torch.load(enc_p, map_location=torch.device("cuda" if use_cuda else "cpu"), weights_only=False)
+            decoder = torch.load(dec_p, map_location=torch.device("cuda" if use_cuda else "cpu"), weights_only=False)
+
+            with torch.no_grad():
+                val_metrics  = evaluate(history_data, future_data, encoder, decoder,
+                                        input_size, val_users,  next_k_step, k,
+                                        test_flag=True, temporal_split=temporal_split)
+                test_metrics = evaluate(history_data, future_data, encoder, decoder,
+                                        input_size, test_users, next_k_step, k,
+                                        test_flag=True, temporal_split=temporal_split)
+
+            vr, vn, vh  = val_metrics
+            tr, tn, th  = test_metrics
+            print(f"  • VAL   – Recall:{vr:.4f}  NDCG:{vn:.4f}  HR:{vh:.4f}")
+            print(f"  • TEST  – Recall:{tr:.4f}  NDCG:{tn:.4f}  HR:{th:.4f}")
+        print()  # blank line after each k
+# ---------------------------------------------------------------------------
+
+
 
 
 
@@ -448,7 +296,7 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
             cur_clean_data_history_and_future[user] = clean_data_history_and_future[user]
 
         if unlearning_algorithm == "neurips_competition_iterative_contrastive":
-            unlearn_neurips_competition_iterative_contrastive(
+            fanchuan.unlearn_neurips_competition_iterative_contrastive(
                 cur_unlearning_user_ids,
                 retain_user_ids,
                 cur_clean_data_history_and_future,
@@ -537,155 +385,6 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
         sys.stdout.flush()
     
 
-    
-
-
-def unlearn_neurips_competition_iterative_contrastive(unlearning_user_ids, retain_user_ids, clean_data_history_and_future, data_history, data_future, encoder, decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer, criterion, output_size, start, n_iters, constrastive_retain_batchsize=16, LOCAL=False, temporal_split=True, print_loss_total=0, total_iter=0, best_recall=0, unlearn_iters_contrastive = 8):
-    total_steps_expected = len(unlearning_user_ids) * (1 + unlearn_iters_contrastive + 10)
-
-    print("First stage: learn uniform pseudolabel")
-    # get a suffle list
-    user_permutation = np.random.permutation(len(unlearning_user_ids))
-    shuffled_users = []
-    for idx in user_permutation:
-        shuffled_users.append(unlearning_user_ids[idx])
-
-    for iter in tqdm(range(0, len(unlearning_user_ids)), disable=not LOCAL):
-        # get training data and label.
-        # get a train batch
-        if temporal_split:
-            # skip user if their basket count is too small for having at least 2 training, 1 valid, and 1 test basket
-            # substract 2 for the real lengths because the basket lists are padded with [-1] at the start and end
-            assert len(data_history[shuffled_users[iter]]) - 2 + len(data_future[shuffled_users[iter]]) - 2 >= 4, f"the basket count for user {shuffled_users[iter]} is smaller than 4, but he was not filtered out"
-            # data_history[training_keys[iter]][-3] is the training label
-            # data_history[training_keys[iter]][-2] is the valid label
-            # data_future[training_keys[iter]][1] is the test label
-            prev_target_variable = [[-1], data_history[shuffled_users[iter]][-3], [-1]]
-            prev_input_variable = data_history[shuffled_users[iter]][:-3] + [[-1]]
-            # potential to have "retain sample" with the unlearning items removed from the basket sequence
-            # for now just do the method on the data as is
-        else:
-            input_variable = data_history[shuffled_users[iter]]
-            target_variable = data_future[shuffled_users[iter]]
-
-        loss = unlearn_iterative_uniform_distribution(prev_input_variable, encoder,
-                    decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer, criterion, output_size)
-
-        print_loss_total += loss
-        total_iter += 1
-
-    print_loss_avg = print_loss_total / len(unlearning_user_ids)
-    print_loss_total = 0
-    # print('%s (%d %d%%) %.6f' % (timeSince(start, total_iter / (n_iters * len(unlearning_user_ids))), total_iter,
-    #                             total_iter / (n_iters * len(unlearning_user_ids)) * 100, print_loss_avg))
-    # print_progress(start, total_iter, total_steps_expected, print_loss_avg)
-    print(f"average loss over {len(unlearning_user_ids)} sample{"s" if len(unlearning_user_ids) != 1 else ""}: {print_loss_avg}")
-    sys.stdout.flush()
-
-    print("Second stage: learn uniform pseudolabel")
-    # Second stage: 
-    for j in range(unlearn_iters_contrastive):
-        print_loss_total = 0
-        # Contrastive round
-
-        shuffled_unlearn_users = random_shuffle(unlearning_user_ids)
-
-        for iter in tqdm(range(0, len(unlearning_user_ids)), disable=not LOCAL):
-            retain_batch_user_ids = random.sample(retain_user_ids, k=constrastive_retain_batchsize)
-            retain_input_batch = [data_history[user][:-3] + [[-1]] for user in retain_batch_user_ids]
-
-            if temporal_split:
-                # skip user if their basket count is too small for having at least 2 training, 1 valid, and 1 test basket
-                # substract 2 for the real lengths because the basket lists are padded with [-1] at the start and end
-                assert len(data_history[shuffled_unlearn_users[iter]]) - 2 + len(data_future[shuffled_unlearn_users[iter]]) - 2 >= 4, f"the basket count for user {shuffled_unlearn_users[iter]} is smaller than 4, but he was not filtered out"
-                # data_history[training_keys[iter]][-3] is the training label
-                # data_history[training_keys[iter]][-2] is the valid label
-                # data_future[training_keys[iter]][1] is the test label
-                prev_target_variable = [[-1], data_history[shuffled_unlearn_users[iter]][-3], [-1]]
-                prev_input_variable = data_history[shuffled_unlearn_users[iter]][:-3] + [[-1]]
-                # potential to have "retain sample" with the unlearning items removed from the basket sequence
-                # for now just do the method on the data as is
-            else:
-                # not fully implemented
-                input_variable = data_history[retain_batch_user_ids[0]]
-                target_variable = data_future[retain_batch_user_ids[0]]
-
-            unlearn_input_batch = [prev_input_variable]
-            loss = unlearn_iterative_contrastive(unlearn_input_batch, retain_input_batch, encoder,
-                        decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer, criterion, output_size)
-
-            print_loss_total += loss
-            total_iter += 1
-
-        # key_idx = np.random.permutation(len(training_key_set))
-        # for idx in tqdm(key_idx):
-        #     input_variable, target_variable = user_to_training_data[training_key_set[idx]]
-
-        #     loss = train(input_variable, target_variable, encoder,
-        #                  decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer, criterion, output_size)
-
-        #     print_loss_total += loss
-        #     total_iter += 1
-
-        # print loss and save model
-        print_loss_avg = print_loss_total / len(unlearning_user_ids)
-        print_loss_total = 0
-        # print('%s (%d %d%%) %.6f' % (timeSince(start, total_iter / (n_iters * len(unlearning_user_ids))), total_iter,
-        #                             total_iter / (n_iters * len(unlearning_user_ids)) * 100, print_loss_avg))
-        # print_progress(start, total_iter, total_steps_expected, print_loss_avg)
-        print(f"average loss over {len(unlearning_user_ids)} sample{"s" if len(unlearning_user_ids) != 1 else ""}: {print_loss_avg}")
-        sys.stdout.flush()
-
-
-        # Retain round
-
-        print_loss_total = 0
-        # use all user ids for retain round but filter out unlearned items from respective users basket histories and labels
-        retain_round_user_ids = list(clean_data_history_and_future.keys())
-        retain_round_samples = 10 * len(unlearning_user_ids)
-        clean_sample_users = [u for u in unlearning_user_ids if u in clean_data_history_and_future.keys()]
-        shuffled_users = clean_sample_users + random.sample(retain_round_user_ids, k=retain_round_samples - len(clean_sample_users))
-
-        for iter in tqdm(range(retain_round_samples), disable=not LOCAL):
-            user = shuffled_users[iter]
-            basket_history = clean_data_history_and_future[user]
-            # get training data and label.
-            # get a train batch
-            if temporal_split:
-                # basket_history is in the format [[-1], b_1, ..., b_n, [-1]] with the complete basket history b_1, ..., b_n
-                # assert len(basket_history) >= 6, f"{basket_history} is too short"
-                target_variable = [[-1], basket_history[-4], [-1]]
-                input_variable = basket_history[:-4] + [[-1]]
-                # potential to have "retain sample" with the unlearning items removed from the basket sequence
-                # for now just do the method on the data as is
-            else:
-                input_variable = data_history[shuffled_users[iter]]
-                target_variable = data_future[shuffled_users[iter]]
-
-            loss = train(input_variable, target_variable, encoder,
-                        decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer, criterion, output_size)
-
-            print_loss_total += loss
-            total_iter += 1
-
-        # key_idx = np.random.permutation(len(training_key_set))
-        # for idx in tqdm(key_idx):
-        #     input_variable, target_variable = user_to_training_data[training_key_set[idx]]
-
-        #     loss = train(input_variable, target_variable, encoder,
-        #                  decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer, criterion, output_size)
-
-        #     print_loss_total += loss
-        #     total_iter += 1
-
-        # print loss and save model
-        print_loss_avg = print_loss_total / retain_round_samples
-        print_loss_total = 0
-        # print('%s (%d %d%%) %.6f' % (timeSince(start, total_iter / (n_iters * len(unlearning_user_ids))), total_iter,
-        #                             total_iter / (n_iters * len(unlearning_user_ids)) * 100, print_loss_avg))
-        # print_progress(start, total_iter, total_steps_expected, print_loss_avg)
-        print(f"average loss over {len(unlearning_user_ids)} sample{"s" if len(unlearning_user_ids) != 1 else ""}: {print_loss_avg}")
-        sys.stdout.flush()
 
 
 
