@@ -1,5 +1,7 @@
 import sys
 import pickle
+import os
+import torch
 
 sys.path.append("..")
 DEBUG = False
@@ -10,6 +12,8 @@ if DEBUG:
 from train_model import train_model
 from model.temporal_set_prediction import temporal_set_prediction
 from utils.util import get_class_weights
+from utils.util import convert_to_gpu, convert_all_data_to_gpu
+from utils.metric import get_metric
 from utils.loss import BPRLoss, WeightMSELoss
 from utils.data_container import get_data_loader, get_data_loader_temporal_split
 from utils.load_config import get_attribute
@@ -112,6 +116,112 @@ def create_loss(loss_function, data_path):
     return loss_func
 
 
+def evaluate_best_model(model,
+                        args,
+                        users_in_unlearning_set=None,
+                        user_to_unlearning_items=None,
+                        retrain_str="",
+                        model_folder=None,
+                        temporal_split=False):
+    """
+    Load the best checkpoint saved during training and evaluate it on the TEST split,
+    reporting Recall@10, Recall@20, NDCG@10, NDCG@20, HitRate@10 and HitRate@20.
+    
+    Parameters
+    ----------
+    model : nn.Module
+        The uninitialized model instance (same class you trained).
+    args : argparse.Namespace
+        The parsed CLI arguments from parse_args().
+    users_in_unlearning_set : list or None
+        If you used retrain_flag, pass through your computed list.
+    user_to_unlearning_items : dict or None
+        If you used retrain_flag, pass through your mapping.
+    retrain_str : str
+        Your retrain_str suffix (empty if none).
+    model_folder : str
+        The folder where your checkpoints were saved 
+        (must match the one you passed into train_model).
+    
+    Returns
+    -------
+    dict
+        A mapping from metric name (e.g. 'recall_10') to its value.
+    """
+
+    # 1) build test DataLoader
+    if temporal_split:
+        test_loader = get_data_loader_temporal_split(
+            history_path=args.history_path,
+            future_path=args.future_path,
+            data_type='test',
+            batch_size=args.batch_size,
+            item_embedding_matrix=model.item_embedding,
+            retrain_flag=args.retrain_flag,
+            users_in_unlearning_set=users_in_unlearning_set,
+            user_to_unlearning_items=user_to_unlearning_items,
+        )
+    else:
+        test_loader = get_data_loader(
+            history_path=args.history_path,
+            future_path=args.future_path,
+            keyset_path=args.keyset_path,
+            data_type='test',
+            batch_size=args.batch_size,
+            item_embedding_matrix=model.item_embedding
+        )
+
+    # 2) load best checkpoint
+    best_path = os.path.join(
+        model_folder,
+        f"model_best_seed_{args.seed}{retrain_str}.pkl"
+    )
+    print(f"[evaluate] Loading best model from: {best_path}")
+    # re‐construct model architecture
+    model.load_state_dict(torch.load(best_path))
+    model = convert_to_gpu(model)
+    model.eval()
+
+    # 3) inference
+    all_y_true, all_y_pred = [], []
+    with torch.no_grad():
+        for (g, nodes_feature, edges_weight,
+             lengths, nodes, truth_data, users_frequency) in test_loader:
+
+            g, nodes_feature, edges_weight, lengths, nodes, truth_data, users_frequency = \
+                convert_all_data_to_gpu(
+                    g, nodes_feature, edges_weight,
+                    lengths, nodes, truth_data, users_frequency
+                )
+
+            out = model(
+                g, nodes_feature, edges_weight,
+                lengths, nodes, users_frequency
+            )
+            all_y_pred.append(out.cpu())
+            all_y_true.append(truth_data.cpu())
+
+    y_true = torch.cat(all_y_true, dim=0)
+    y_pred = torch.cat(all_y_pred, dim=0)
+
+    # 4) compute metrics
+    scores = get_metric(y_true=y_true, y_pred=y_pred)
+    results = {}
+    for k in [10, 20]:
+        r = scores.get(f"recall_{k}")
+        n = scores.get(f"ndcg_{k}")
+        h = scores.get(f"hitrate_{k}") or scores.get(f"hit_rate_{k}")
+        print(f"--- Test @ {k} ---")
+        if r is not None: print(f"Recall@{k}:  {r:.4f}")
+        if n is not None: print(f"NDCG@{k}:    {n:.4f}")
+        if h is not None: print(f"HitRate@{k}: {h:.4f}")
+        if r is not None: results[f"recall_{k}"] = r
+        if n is not None: results[f"ndcg_{k}"]    = n
+        if h is not None: results[f"hitrate_{k}"] = h
+
+    return results
+
+
 def train(
     save_model_folder,
     history_path,
@@ -134,6 +244,7 @@ def train(
     popular_percentage=None,
     unlearning_fraction=None,
     seed=None,
+    args=None,
 ):
     model = create_model(save_model_folder, item_embed_dim)
 
@@ -212,9 +323,9 @@ def train(
         model_folder = f"/opt/results/save_model_folder/{data}/{save_model_folder}"
         tensorboard_folder = f"/opt/results/runs/{data}/{save_model_folder}"
 
-    shutil.rmtree(model_folder, ignore_errors=True)
+    # shutil.rmtree(model_folder, ignore_errors=True)
     os.makedirs(model_folder, exist_ok=True)
-    shutil.rmtree(tensorboard_folder, ignore_errors=True)
+    # shutil.rmtree(tensorboard_folder, ignore_errors=True)
     os.makedirs(tensorboard_folder, exist_ok=True)
 
     if optim == "Adam":
@@ -240,7 +351,18 @@ def train(
                 retrain_flag=retrain_flag,
                 retrain_str=retrain_str,
                 seed=seed,)
+    
+    scores = evaluate_best_model(
+        model=model,
+        args=args,
+        users_in_unlearning_set=users_in_unlearning_set,
+        user_to_unlearning_items=user_to_unlearning_items,
+        retrain_str=retrain_str,
+        model_folder=model_folder,
+        temporal_split=temporal_split,
+    )
 
+    
 
 if __name__ == '__main__':
     args = parse_args()
@@ -266,5 +388,6 @@ if __name__ == '__main__':
         method=args.method,
         popular_percentage=args.popular_percentage,
         unlearning_fraction=args.unlearning_fraction,
+        args=args,
     )
     sys.exit()
