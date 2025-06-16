@@ -203,7 +203,7 @@ def parse_args():
         help="how many samples are used for lissa hessian estimation"
     )
     parser.add_argument(
-        "--retain_samples_used_for_update_scif",
+        "--retain_samples_used_for_update",
         type=int,
         default=128,
         help="how many samples are used in the HVP Hv inside v (v is the avg of the gradients of the unlearn sample, the cleaned one and some retain samples)"
@@ -486,7 +486,7 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
                 temporal_split=temporal_split,
                 retain_pairs=retain_pairs,
                 train_pair_count=args.lissa_train_pair_count_scif,
-                retain_samples_used_for_update=args.retain_samples_used_for_update_scif,
+                retain_samples_used_for_update=args.retain_samples_used_for_update,
             )
         elif unlearning_algorithm == "kookmin":
             kookmin.unlearn_by_reinit_and_finetune(
@@ -509,6 +509,7 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
                 device=torch.device("cuda" if use_cuda else "cpu"),
                 param_list=param_list,
                 param_index=param_index,
+                retain_samples_used_for_update=args.retain_samples_used_for_update,
             )
         else:
             print(f"Invalid unlearning algorithm: {unlearning_algorithm}.")

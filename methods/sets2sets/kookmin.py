@@ -119,6 +119,7 @@ def unlearn_by_reinit_and_finetune(
     encoder_optimizer=None,
     param_list=None,
     param_index=None,
+    retain_samples_used_for_update=32,
 ):
     """
     Re-implements Kookmin’s low-|grad| re-init but with *encoder/decoder*
@@ -225,7 +226,7 @@ def unlearn_by_reinit_and_finetune(
 
         print_loss_total = 0
 
-        retain_round_samples = 32 * len(unlearning_user_ids)
+        retain_round_samples = retain_samples_used_for_update
         k_more = max(0, retain_round_samples - len(clean_unlearn_pairs))
         extra_retain = random.sample(retain_pairs, k=k_more) if k_more else []
         retain_pairs_sampled = clean_unlearn_pairs + extra_retain
