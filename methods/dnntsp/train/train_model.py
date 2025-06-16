@@ -120,6 +120,7 @@ def train_model(model: nn.Module,
                     print(f"model save as {model_path}")
 
         scheduler.step(loss_dict['train'])
+        sys.stdout.flush()
 
         writer.add_scalars('Loss', {
             f'{name} loss': loss_dict[name] for name in name_list}, global_step=epoch)
