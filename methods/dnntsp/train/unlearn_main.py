@@ -1,5 +1,4 @@
 import sys
-import pickle
 
 sys.path.append("..")
 DEBUG = False
@@ -18,7 +17,6 @@ import torch.nn as nn
 import os
 import shutil
 import argparse
-import math
 
 
 def set_seed(seed: int) -> None:
@@ -50,15 +48,33 @@ def parse_args():
     parser.add_argument('--seed', type=int, default=2, help='random seed')
     parser.add_argument('--temporal_split', action="store_true", help='set this flag if you want a temporal split instead of a user split')
     parser.add_argument(
-        "--retrain_flag",
-        action="store_true",
-        help="set this flag if you want to retrain the model without a certain forget set",
+        "--unlearning_fraction",
+        type=float,
+        default=0.0001,
+        help="Fraction of data to unlearn"
     )
     parser.add_argument(
-        "--retrain_checkpoint_idx_to_match",
-        type=int,
-        default=None,
-        help="which unlearning checkpoint should be taken as example to create the unlearning set (only take a subset of the unlearning set given)"
+        "--method",
+        type=str,
+        default="popular",
+        help="Unlearning method to use: random, popular, unpopular, or sensitive"
+    )
+    parser.add_argument(
+        "--popular_percentage",
+        type=float,
+        default=0.1,
+        help="Fraction of most/least popular items to consider"
+    )
+    parser.add_argument(
+        "--unlearning_algorithm",
+        type=str,
+        default="scif",
+        choices=[
+            "neurips_competition_iterative_contrastive",
+            "scif",
+            "kookmin",
+        ],
+        help="What unlearning algorithm is used."
     )
     parser.add_argument(
         "--sensitive_category",
@@ -68,24 +84,29 @@ def parse_args():
         help="When choosing sensitive items to unlearn, choose which category"
     )
     parser.add_argument(
-        "--method",
-        type=str,
-        default="popular",
-        help="Unlearning method to use: random, popular, unpopular, or sensitive"
+        "--retrain_checkpoint_idx_to_match",
+        type=int,
+        default=None,
+        help="which unlearning checkpoint should be taken as example to create the unlearning set (only take a subset of the unlearning set given)"
     )
     parser.add_argument(
-        "--unlearning_fraction",
-        type=float,
-        default=0.0001,
-        help="Fraction of data to unlearn"
+        "--lissa_train_pair_count_scif",
+        type=int,
+        default=1024,
+        help="how many samples are used for lissa hessian estimation"
     )
     parser.add_argument(
-        "--popular_percentage",
-        type=float,
-        default=0.1,
-        help="Fraction of most/least popular items to consider"
+        "--retain_samples_used_for_update",
+        type=int,
+        default=128,
+        help="how many samples are used in the HVP Hv inside v (v is the avg of the gradients of the unlearn sample, the cleaned one and some retain samples)"
     )
-
+    parser.add_argument(
+        "--kookmin_init_rate",
+        type=float,
+        default=0.01,
+        help="percentage of parameters getting reset in the kookmin unlearning algorithm",
+    )
     return parser.parse_args()
 
 
@@ -112,81 +133,23 @@ def create_loss(loss_function, data_path):
     return loss_func
 
 
-def train(
-    save_model_folder,
-    history_path,
-    future_path,
-    keyset_path,
-    item_embed_dim,
-    loss_function,
-    epochs,
-    batch_size,
-    learning_rate,
-    optim,
-    weight_decay,
-    data_path,
-    LOCAL=False,
-    temporal_split=False,
-    retrain_flag=False,
-    retrain_checkpoint_idx_to_match=None,
-    sensitive_category=None,
-    method=None,
-    popular_percentage=None,
-    unlearning_fraction=None,
-    seed=None,
-):
+def unlearn(save_model_folder, history_path, future_path, keyset_path, item_embed_dim, loss_function, epochs, batch_size, learning_rate, optim, weight_decay, data_path, LOCAL=False, temporal_split=False, retrain_flag=False, unlearn_flag=False):
     model = create_model(save_model_folder, item_embed_dim)
 
-    dataset = get_attribute("data")
-    percentage_str = f"_popular_percentage_{popular_percentage}" if method in ["popular", "unpopular"] else ""
-    fraction_str = f"_unlearning_fraction_{unlearning_fraction}" if method in ["popular", "unpopular", "random", "sensitive"] else ""
-    unlearning_data_file = f'../../../unlearning_data/dataset_{dataset.lower()}_seed_{seed}_method_{method}{fraction_str}{percentage_str}.pkl'
-
-    users_in_unlearning_set = None
-    user_to_unlearning_items = None
-    retrain_str = ""
-
-    if retrain_flag:
-
-        with open(unlearning_data_file, "rb") as f:
-            user_to_unlearning_items = pickle.load(f)
-            if method == "sensitive":
-                user_to_unlearning_items = user_to_unlearning_items[sensitive_category]
-        
-        retrain_str = (
-            f"_sensitive_category_{sensitive_category}"
-            f"_unlearning_fraction_{unlearning_fraction}"
-            f"_retrain_checkpoint_idx_to_match_{retrain_checkpoint_idx_to_match}"
-        )
-        # remove current forget set from the training data. need parameter to tell how much of the forget set is taken to get the wanted retrained models at certain subsets of the unlearning set
-        n = len(user_to_unlearning_items)
-        checkpoint_every = math.ceil(n / 4)
-        checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 5 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 5 and i == n - 1))]
-
-        if len(checkpoint_idxs) == 5:
-            checkpoint_idxs = checkpoint_idxs[:4] + [checkpoint_idxs[-1]]
-
-        unlearning_set_take_first_x = checkpoint_idxs[retrain_checkpoint_idx_to_match]
-        # remove sensitive items from users in retraining
-        users_in_unlearning_set = sorted(user_to_unlearning_items.keys())[:unlearning_set_take_first_x + 1]
-
+    # either retrain or unlearn
+    assert unlearn_flag ^ retrain_flag
+    
     if temporal_split:
         train_data_loader = get_data_loader_temporal_split(history_path=history_path,
                                             future_path=future_path,
                                             data_type='train',
                                             batch_size=batch_size,
-                                            item_embedding_matrix=model.item_embedding,
-                                            retrain_flag=retrain_flag,
-                                            users_in_unlearning_set=users_in_unlearning_set,
-                                            user_to_unlearning_items=user_to_unlearning_items,)
+                                            item_embedding_matrix=model.item_embedding)
         valid_data_loader = get_data_loader_temporal_split(history_path=history_path,
                                             future_path=future_path,
                                             data_type='val',
                                             batch_size=batch_size,
-                                            item_embedding_matrix=model.item_embedding,
-                                            retrain_flag=retrain_flag,
-                                            users_in_unlearning_set=users_in_unlearning_set,
-                                            user_to_unlearning_items=user_to_unlearning_items,)
+                                            item_embedding_matrix=model.item_embedding)
     else:
         train_data_loader = get_data_loader(history_path=history_path,
                                             future_path=future_path,
@@ -200,7 +163,6 @@ def train(
                                             data_type='val',
                                             batch_size=batch_size,
                                             item_embedding_matrix=model.item_embedding)
-        
     loss_func = create_loss(loss_function, data_path)
 
     data = get_attribute("data")
@@ -236,35 +198,25 @@ def train(
                 optimizer=optimizer,
                 model_folder=model_folder,
                 tensorboard_folder=tensorboard_folder,
-                LOCAL=LOCAL,
-                retrain_flag=retrain_flag,
-                retrain_str=retrain_str,
-                seed=seed,)
+                LOCAL=LOCAL)
 
 
 if __name__ == '__main__':
     args = parse_args()
     set_seed(args.seed)
-    train(save_model_folder=args.save_model_folder,
-        history_path=args.history_path,
-        future_path=args.future_path,
-        keyset_path=args.keyset_path,
-        item_embed_dim=args.item_embed_dim,
-        loss_function=args.loss_function,
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        learning_rate=args.learning_rate,
-        optim=args.optim,
-        weight_decay=args.weight_decay,
-        data_path=args.data_path,
-        LOCAL=args.LOCAL,
-        temporal_split=args.temporal_split,
-        retrain_flag=args.retrain_flag,
-        seed=args.seed,
-        retrain_checkpoint_idx_to_match=args.retrain_checkpoint_idx_to_match,
-        sensitive_category=args.sensitive_category,
-        method=args.method,
-        popular_percentage=args.popular_percentage,
-        unlearning_fraction=args.unlearning_fraction,
-    )
+    unlearn(save_model_folder=args.save_model_folder,
+          history_path=args.history_path,
+          future_path=args.future_path,
+          keyset_path=args.keyset_path,
+          item_embed_dim=args.item_embed_dim,
+          loss_function=args.loss_function,
+          epochs=args.epochs,
+          batch_size=args.batch_size,
+          learning_rate=args.learning_rate,
+          optim=args.optim,
+          weight_decay=args.weight_decay,
+          data_path=args.data_path,
+          LOCAL=args.LOCAL,
+          temporal_split=args.temporal_split,
+          args=args)
     sys.exit()

@@ -25,7 +25,10 @@ def train_model(model: nn.Module,
                 optimizer,
                 model_folder,
                 tensorboard_folder,
-                LOCAL=False):
+                LOCAL=False,
+                retrain_flag=False,
+                retrain_str="",
+                seed=None,):
     """
     Args:
         model: nn.Module
@@ -109,7 +112,8 @@ def train_model(model: nn.Module,
                 validate_ndcg = np.mean(validate_ndcg_list)
                 if validate_ndcg > validate_max_ndcg:
                     validate_max_ndcg = validate_ndcg
-                    model_path = f"{model_folder}/model_epoch_{epoch}.pkl"
+                    # model_path = f"{model_folder}/model_epoch_{epoch}.pkl"
+                    model_path = f'{model_folder}/model_epoch_{epoch}_seed_{seed}{retrain_str}.pkl'
                     save_model(model, model_path)
                     print(f"model save as {model_path}")
 

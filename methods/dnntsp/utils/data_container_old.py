@@ -31,15 +31,6 @@ class SetDataset(Dataset):
         self.data_list = []
         self.item_embedding_matrix = item_embedding_matrix
 
-        # data_history[str(user_id)] contains a list of baskets for the user with the matching id starting with [-1] and ending in [-1] (why?)
-        # that is why we take h_basket = data_history[user][1:-1]
-        #
-        # data_future[str(user_id)] contains a list of baskets for the user with the matching id starting with [-1] and ending in [-1] (why?)
-        # here this list is always of the form [[-1], x, [-1]] where x is a basket (most recent one)
-        # that is why we take f_basket = data_future[user][1]
-        #
-        # user_data is a list of baskets of the user
-
         if key is None:
             for key in ['train', 'val', 'test']:
                 user_list = data_keyset[key]
@@ -56,7 +47,6 @@ class SetDataset(Dataset):
                 f_basket = data_future[user][1]
                 h_basket.append(f_basket)
                 user_data = [torch.tensor(list(set(basket))) for basket in h_basket]
-                
                 self.data_list.append(user_data)
 
 
@@ -74,7 +64,7 @@ class SetDataset(Dataset):
         # print(user_data)
         # nodes -> tensor,  len(nodes) = N
         # may change the order of appearing items in dataset
-        nodes = self.get_nodes(baskets=user_data[:-1]).long()
+        nodes = self.get_nodes(baskets=user_data[:-1])
         # print(nodes)
         # N * item_embedding tensor
         # print(nodes)
@@ -230,114 +220,3 @@ def get_data_loader(history_path, future_path, keyset_path, data_type, batch_siz
                              drop_last=False,
                              collate_fn=collate_set_across_user)
     return data_loader
-
-
-
-def get_data_loader_temporal_split(history_path, future_path, data_type, batch_size, item_embedding_matrix, retrain_flag=False, users_in_unlearning_set=None, user_to_unlearning_items=None,):
-    """
-    Args:
-        data_path: str
-        data_type: str, 'train'/'validate'/'test'
-        batch_size: int
-    Returns:
-        data_loader: DataLoader
-    """
-
-    dataset = TemporalSplitSetDataset(
-        history_path,
-        future_path,
-        item_embedding_matrix=item_embedding_matrix,
-        key=data_type,
-        retrain_flag=retrain_flag,
-        users_in_unlearning_set=users_in_unlearning_set,
-        user_to_unlearning_items=user_to_unlearning_items,
-    )
-    print(f'{data_type} data length -> {len(dataset)}')
-    data_loader = DataLoader(dataset=dataset,
-                             batch_size=batch_size,
-                             shuffle=False,
-                             drop_last=False,
-                             collate_fn=collate_set_across_user)
-    return data_loader
-
-
-class TemporalSplitSetDataset(SetDataset):
-    def __init__(
-        self,
-        history_path,
-        future_path,
-        item_embedding_matrix,
-        key=None,
-        retrain_flag=False,
-        users_in_unlearning_set=None,
-        user_to_unlearning_items=None,
-    ):
-        """
-        Args:
-            data_path: str
-            key: str
-        """
-        with open(history_path, 'r') as f:
-            data_history = json.load(f)
-        with open(future_path, 'r') as f:
-            data_future = json.load(f)
-
-        self.data_list = []
-        self.item_embedding_matrix = item_embedding_matrix
-
-        # data_history[str(user_id)] contains a list of baskets for the user with the matching id starting with [-1] and ending in [-1] (why?)
-        # that is why we take h_basket = data_history[user][1:-1]
-        #
-        # data_future[str(user_id)] contains a list of baskets for the user with the matching id starting with [-1] and ending in [-1] (why?)
-        # here this list is always of the form [[-1], x, [-1]] where x is a basket (most recent one)
-        # that is why we take f_basket = data_future[user][1]
-        #
-        # user_data is a list of baskets of the user
-
-        # use all users
-        user_list = sorted(data_future.keys(), key=int)
-
-        if key is None:
-            for key in ['train', 'val', 'test']:
-                for user in user_list:
-                    h_basket = data_history[user][1:-1]
-                    f_basket = data_future[user][1]
-                    h_basket.append(f_basket)
-                    # do not include users where we can't have train, valid, test data
-                    if len(h_basket) < 4:
-                        continue
-                    if key == "train":
-                        user_data = [torch.tensor(list(set(basket)), dtype=torch.long) for basket in h_basket[:-2]]
-                    elif key == "val":
-                        user_data = [torch.tensor(list(set(basket)), dtype=torch.long) for basket in h_basket[:-1]]
-                    elif key == "test":
-                        user_data = [torch.tensor(list(set(basket)), dtype=torch.long) for basket in h_basket]
-                    else:
-                        print(f"Invalid key name for dataset creation: key = {key}", file=sys.stderr)
-                        sys.exit(10)
-        else:
-            unlear_user_set = set(users_in_unlearning_set)
-            for user in user_list:
-                h_basket = data_history[user][1:-1]
-                f_basket = data_future[user][1]
-                h_basket.append(f_basket)
-                
-                # if we retrain filter out items we want to unlearn
-                if retrain_flag and user in unlear_user_set:
-                    h_basket = list(filter(lambda x: len(x) > 0, [[item for item in basket if item not in user_to_unlearning_items[user]] for basket in h_basket]))
-
-                # do not include users where we can't have train, valid, test data
-                if len(h_basket) < 4:
-                    continue
-                if key == "train":
-                    user_data = [torch.tensor(list(set(basket)), dtype=torch.long) for basket in h_basket[:-2]]
-                elif key == "val":
-                    user_data = [torch.tensor(list(set(basket)), dtype=torch.long) for basket in h_basket[:-1]]
-                elif key == "test":
-                    user_data = [torch.tensor(list(set(basket)), dtype=torch.long) for basket in h_basket]
-                else:
-                    print(f"Invalid key name for dataset creation: key = {key}", file=sys.stderr)
-                    sys.exit(10)
-                
-                self.data_list.append(user_data)
-        
