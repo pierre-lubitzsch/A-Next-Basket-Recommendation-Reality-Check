@@ -11,7 +11,8 @@ from utils.load_config import get_attribute
 # convert data from cpu to gpu, accelerate the running speed
 def convert_to_gpu(data):
     if get_attribute('cuda') != -1 and torch.cuda.is_available():
-        data = data.to(get_attribute('cuda'))
+        device = torch.device("cuda")
+        data = data.to(device)
     return data
 
 
