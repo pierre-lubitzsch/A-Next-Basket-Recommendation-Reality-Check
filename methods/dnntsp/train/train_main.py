@@ -122,7 +122,9 @@ def evaluate_best_model(model,
                         user_to_unlearning_items=None,
                         retrain_str="",
                         model_folder=None,
-                        temporal_split=False):
+                        temporal_split=False,
+                        model_path=None,
+                        retrain_flag=False,):
     """
     Load the best checkpoint saved during training and evaluate it on the TEST split,
     reporting Recall@10, Recall@20, NDCG@10, NDCG@20, HitRate@10 and HitRate@20.
@@ -157,7 +159,7 @@ def evaluate_best_model(model,
             data_type='test',
             batch_size=args.batch_size,
             item_embedding_matrix=model.item_embedding,
-            retrain_flag=args.retrain_flag,
+            retrain_flag=retrain_flag,
             users_in_unlearning_set=users_in_unlearning_set,
             user_to_unlearning_items=user_to_unlearning_items,
         )
@@ -175,8 +177,8 @@ def evaluate_best_model(model,
     best_path = os.path.join(
         model_folder,
         f"model_best_seed_{args.seed}{retrain_str}.pkl"
-    )
-    print(f"[evaluate] Loading best model from: {best_path}")
+    ) if model_path is None else model_path
+    print(f"[evaluate] Loading model from: {best_path}")
     # re‐construct model architecture
     model.load_state_dict(torch.load(best_path))
     model = convert_to_gpu(model)
@@ -360,6 +362,7 @@ def train(
         retrain_str=retrain_str,
         model_folder=model_folder,
         temporal_split=temporal_split,
+        retrain_flag=args.retrain_flag,
     )
 
     

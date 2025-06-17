@@ -166,54 +166,85 @@ def unlearn_by_reinit_and_finetune(
 
     signed_grads = [gr - gf for gr, gf in zip(grads_retain, grads_forget)]
 
-    scores = torch.tensor([_mean_abs(g).item() for g in signed_grads],
-                          device=device)
-    k = max(1, int(len(scores) * kookmin_init_rate))
-    thresh = scores.kthvalue(k).values.item()
+    # scores = torch.tensor([_mean_abs(g).item() for g in signed_grads],
+    #                       device=device)
+    # k = max(1, int(len(scores) * kookmin_init_rate))
+    # thresh = scores.kthvalue(k).values.item()
 
-    def _reinit_tensor(tensor: torch.Tensor, module: nn.Module, name: str):
-        with torch.no_grad():
-            if isinstance(module, nn.Conv2d):
-                init.kaiming_normal_(tensor)
-            elif isinstance(module, nn.Linear):
-                init.kaiming_uniform_(tensor, a=math.sqrt(5))
-            elif isinstance(module, nn.Embedding):
-                init.normal_(tensor, 0, 0.02)
-            elif isinstance(module, (nn.GRU, nn.LSTM, nn.RNN)):
-                # weight_ih_l0, weight_hh_l0, bias_ih_l0, bias_hh_l0, ...
-                if "weight" in name:
-                    init.xavier_uniform_(tensor)
-                else:  # bias
-                    tensor.zero_()
-            elif isinstance(module, nn.BatchNorm2d):
-                if "weight" in name:
-                    tensor.fill_(1.)
-                else:
-                    tensor.zero_()
-            else:
-                init.normal_(tensor, 0, 0.02)
+    # def _reinit_tensor(tensor: torch.Tensor, module: nn.Module, name: str):
+    #     with torch.no_grad():
+    #         if isinstance(module, nn.Conv2d):
+    #             init.kaiming_normal_(tensor)
+    #         elif isinstance(module, nn.Linear):
+    #             init.kaiming_uniform_(tensor, a=math.sqrt(5))
+    #         elif isinstance(module, nn.Embedding):
+    #             init.normal_(tensor, 0, 0.02)
+    #         elif isinstance(module, (nn.GRU, nn.LSTM, nn.RNN)):
+    #             # weight_ih_l0, weight_hh_l0, bias_ih_l0, bias_hh_l0, ...
+    #             if "weight" in name:
+    #                 init.xavier_uniform_(tensor)
+    #             else:  # bias
+    #                 tensor.zero_()
+    #         elif isinstance(module, nn.BatchNorm2d):
+    #             if "weight" in name:
+    #                 tensor.fill_(1.)
+    #             else:
+    #                 tensor.zero_()
+    #         else:
+    #             init.normal_(tensor, 0, 0.02)
 
-    reinit_params, kept_params = [], []
+    # reinit_params, kept_params = [], []
 
-    print("picking parameters to re-initialize")
+    # print("picking parameters to re-initialize")
 
-    for (net_name, net) in [("encoder", encoder), ("decoder", decoder)]:
-        for n, p in net.named_parameters():
-            if not p.requires_grad or p.grad is None:
-                continue
+    # for (net_name, net) in [("encoder", encoder), ("decoder", decoder)]:
+    #     for n, p in net.named_parameters():
+    #         if not p.requires_grad or p.grad is None:
+    #             continue
 
-            g_idx = param_index[id(p)]       # position in the signed_grad list
-            if _mean_abs(signed_grads[g_idx]) > thresh:
-                kept_params.append(p)        # keep, lr will be 0.1·base
-                continue
+    #         g_idx = param_index[id(p)]       # position in the signed_grad list
+    #         if _mean_abs(signed_grads[g_idx]) > thresh:
+    #             kept_params.append(p)        # keep, lr will be 0.1·base
+    #             continue
 
-            module_name = n.split('.')[0]
-            module = dict(net.named_modules())[module_name]
-            _reinit_tensor(p, module, n)               
-            reinit_params.append(p)          # full learning-rate here
+    #         module_name = n.split('.')[0]
+    #         module = dict(net.named_modules())[module_name]
+    #         _reinit_tensor(p, module, n)               
+    #         reinit_params.append(p)          # full learning-rate here
 
-    _reset_adam_state(encoder_optimizer, reinit_params)
-    _reset_adam_state(decoder_optimizer, reinit_params)
+    # _reset_adam_state(encoder_optimizer, reinit_params)
+    # _reset_adam_state(decoder_optimizer, reinit_params)
+
+    all_scores = torch.cat([g.abs().reshape(-1) for g in signed_grads])
+    total = all_scores.numel()
+    k = max(1, int(total * kookmin_init_rate))
+    thresh = all_scores.kthvalue(k).values.item()
+
+    # 3) re-init only the low-gradient entries *and* remember a mask per param
+    reinit_masks: Dict[torch.Tensor, torch.BoolTensor] = {}
+    for p, g in zip(param_list, signed_grads):
+        mask = g.abs() <= thresh
+        if not mask.any():
+            continue
+
+        # make a freshly initialized tensor of the same shape
+        new_p = torch.empty_like(p.data)
+        if p.dim() == 4:            # e.g. Conv2d weight
+            nn.init.kaiming_normal_(new_p, mode="fan_out", nonlinearity="relu")
+        elif p.dim() == 2:          # e.g. Linear weight
+            nn.init.kaiming_uniform_(new_p, a=math.sqrt(5))
+        else:                       # embeddings, biases, …
+            new_p.normal_(0, 0.02)
+
+        # overwrite only the “low-grad” slots
+        p.data[mask] = new_p[mask]
+
+        # store the mask to use later
+        reinit_masks[p] = mask
+
+    # 4) reset Adam state on exactly those params
+    _reset_adam_state(encoder_optimizer, list(reinit_masks.keys()))
+    _reset_adam_state(decoder_optimizer, list(reinit_masks.keys()))
 
     # wipe grads so we start clean
     encoder.zero_grad()
@@ -233,7 +264,7 @@ def unlearn_by_reinit_and_finetune(
 
         for input_variable, target_variable in tqdm.tqdm(retain_pairs_sampled, disable=not LOCAL):
             loss = train(input_variable, target_variable, encoder,
-                        decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer, criterion, output_size, param_grads_to_scale=kept_params, scale_for_params=0.1)
+                        decoder, codes_inverse_freq, encoder_optimizer, decoder_optimizer, criterion, output_size, reinit_masks=reinit_masks, scale_for_reinit_params=10)
 
             print_loss_total += loss
 

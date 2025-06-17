@@ -17,10 +17,24 @@ import torch.nn as nn
 import os
 import shutil
 import argparse
+from train_main import evaluate_best_model
+from utils.util import save_model, convert_to_gpu, convert_all_data_to_gpu, load_model
+
+import pickle
+import math
+import json
+import random
+import numpy as np
+import time
+
+import scif
+import kookmin
 
 
 def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
 
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
@@ -28,6 +42,7 @@ def set_seed(seed: int) -> None:
 
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
 
 
 def parse_args():
@@ -133,36 +148,9 @@ def create_loss(loss_function, data_path):
     return loss_func
 
 
-def unlearn(save_model_folder, history_path, future_path, keyset_path, item_embed_dim, loss_function, epochs, batch_size, learning_rate, optim, weight_decay, data_path, LOCAL=False, temporal_split=False, retrain_flag=False, unlearn_flag=False):
-    model = create_model(save_model_folder, item_embed_dim)
-
-    # either retrain or unlearn
-    assert unlearn_flag ^ retrain_flag
+def unlearn(save_model_folder, history_path, future_path, keyset_path, item_embed_dim, loss_function, epochs, batch_size, learning_rate, optim, weight_decay, data_path, LOCAL=False, temporal_split=False, args=None,):
+    script_start = time.perf_counter()
     
-    if temporal_split:
-        train_data_loader = get_data_loader_temporal_split(history_path=history_path,
-                                            future_path=future_path,
-                                            data_type='train',
-                                            batch_size=batch_size,
-                                            item_embedding_matrix=model.item_embedding)
-        valid_data_loader = get_data_loader_temporal_split(history_path=history_path,
-                                            future_path=future_path,
-                                            data_type='val',
-                                            batch_size=batch_size,
-                                            item_embedding_matrix=model.item_embedding)
-    else:
-        train_data_loader = get_data_loader(history_path=history_path,
-                                            future_path=future_path,
-                                            keyset_path=keyset_path,
-                                            data_type='train',
-                                            batch_size=batch_size,
-                                            item_embedding_matrix=model.item_embedding)
-        valid_data_loader = get_data_loader(history_path=history_path,
-                                            future_path=future_path,
-                                            keyset_path=keyset_path,
-                                            data_type='val',
-                                            batch_size=batch_size,
-                                            item_embedding_matrix=model.item_embedding)
     loss_func = create_loss(loss_function, data_path)
 
     data = get_attribute("data")
@@ -174,11 +162,20 @@ def unlearn(save_model_folder, history_path, future_path, keyset_path, item_embe
         model_folder = f"/opt/results/save_model_folder/{data}/{save_model_folder}"
         tensorboard_folder = f"/opt/results/runs/{data}/{save_model_folder}"
 
-    shutil.rmtree(model_folder, ignore_errors=True)
+    model = create_model(save_model_folder, item_embed_dim)
+    best_model_path = f'{model_folder}/model_best_seed_{args.seed}.pkl'
+    model = load_model(model, best_model_path)
+    # TODO: save best models with this name on cluster to get
+
+    # shutil.rmtree(model_folder, ignore_errors=True)
     os.makedirs(model_folder, exist_ok=True)
-    shutil.rmtree(tensorboard_folder, ignore_errors=True)
+    # shutil.rmtree(tensorboard_folder, ignore_errors=True)
     os.makedirs(tensorboard_folder, exist_ok=True)
 
+    if args.unlearning_algorithm == "kookmin":
+        # params which were not initialized have a lower gradient.
+        # as these are the majority we scale down the lr globally and locally scale it up again for the reinitialized params
+        learning_rate *= 0.1
     if optim == "Adam":
         optimizer = torch.optim.Adam(model.parameters(),
                                      lr=learning_rate,
@@ -190,15 +187,154 @@ def unlearn(save_model_folder, history_path, future_path, keyset_path, item_embe
     else:
         raise NotImplementedError("The specified optimizer is not implemented.")
 
-    train_model(model=model,
-                train_data_loader=train_data_loader,
-                valid_data_loader=valid_data_loader,
-                loss_func=loss_func,
-                epochs=epochs,
+
+    model = convert_to_gpu(model)
+    model.train()
+    loss_func = convert_to_gpu(loss_func)
+
+    data = get_attribute("data")
+    percentage_str = f"_popular_percentage_{args.popular_percentage}" if args.method in ["popular", "unpopular"] else ""
+    fraction_str = f"_unlearning_fraction_{args.unlearning_fraction}" if args.method in ["popular", "unpopular", "random", "sensitive"] else ""
+    unlearning_data_file = f'../../../unlearning_data/dataset_{data.lower()}_seed_{args.seed}_method_{args.method}{fraction_str}{percentage_str}.pkl'
+
+    with open(unlearning_data_file, "rb") as f:
+        user_to_unlearning_items = pickle.load(f)
+        if args.method == "sensitive":
+            user_to_unlearning_items = user_to_unlearning_items[args.sensitive_category]
+
+    n = len(user_to_unlearning_items)
+    checkpoint_every = math.ceil(n / 4)
+    checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 5 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 5 and i == n - 1))]
+
+    unlearning_user_ids = sorted(user_to_unlearning_items.keys())
+
+    # for kookmin
+    param_list = [p for p in model.parameters() if p.requires_grad]
+    param_index = {id(p): i for i,p in enumerate(param_list)}
+
+    with open(future_path, 'r') as f:
+        data_future = json.load(f)
+    
+    user_list = sorted(data_future.keys(), key=int)
+    unlearning_user_set = set(unlearning_user_ids)
+    retain_user_ids = [u for u in user_list if u not in unlearning_user_set]
+
+    with open(history_path, 'r') as f:
+        data_history = json.load(f)
+    with open(future_path, 'r') as f:
+        data_future  = json.load(f)
+
+    # if you're doing temporal_split, only keep those retain users
+    # whose post-processed basket list is at least length 4
+    valid_retain = []
+    for u in retain_user_ids:
+        # baskets without the leading/trailing [-1]
+        h_baskets = data_history[u][1:-1]
+        # append their future basket so we get the full sequence
+        h_baskets = h_baskets + [ data_future[u][1] ]
+        # scif doesn't remove any items from h_baskets (retrain_flag=False)
+        # check the minimal length requirement
+        if len(h_baskets) >= 4:
+            valid_retain.append(u)
+
+    # overwrite retain_user_ids with only the valid ones
+    retain_user_ids = valid_retain
+
+    for i, user in enumerate(sorted(unlearning_user_ids)):
+        epoch_start = time.perf_counter()
+        clean_user_ids = []
+        # check if cleaned history can be used for training:
+        h_baskets = data_history[user][1:-1]
+        # append their future basket so we get the full sequence
+        h_baskets = h_baskets + [data_future[user][1]]
+        h_baskets = [[item for item in basket if item not in user_to_unlearning_items[user]] for basket in h_baskets]
+        h_baskets = [basket for basket in h_baskets if len(basket) > 0]
+        # scif doesn't remove any items from h_baskets (retrain_flag=False)
+        # check the minimal length requirement
+        if len(h_baskets) >= 4:
+            clean_user_ids.append(user)
+
+        print(f"\nunlearning items for user {i + 1}/{len(unlearning_user_ids)} with id: {user}\n")
+        cur_unlearning_user_ids = [user]
+        assert temporal_split, f"user split not implemented yet, need to set temporal_split."
+
+        if args.unlearning_algorithm == "scif":
+            scif.scif_unlearn(
+                unlearning_user_ids=cur_unlearning_user_ids,
+                retain_user_ids=retain_user_ids,
+                n=len(user_list),
+                model=model,
+                criterion=loss_func,
+                LOCAL=LOCAL,
+                temporal_split=temporal_split,
+                damping=0.01,
+                scale=25.0,
+                lissa_bs=16,
+                retain_samples_used_for_update=args.retain_samples_used_for_update,
+                train_pair_count=args.lissa_train_pair_count_scif,
+                history_path=history_path,
+                future_path=future_path,
+                user_to_unlearning_items=user_to_unlearning_items,
+            )
+        elif args.unlearning_algorithm == "fanchuan":
+            pass
+        elif args.unlearning_algorithm == "kookmin":
+            kookmin.unlearn_by_reinit_and_finetune(
+                unlearning_user_ids=cur_unlearning_user_ids,
+                retain_user_ids=retain_user_ids,
+                model=model,
+                criterion=loss_func,
+                LOCAL=LOCAL,
+                temporal_split=temporal_split,
+                kookmin_init_rate=args.kookmin_init_rate,     # 1 % of lowest-|grad| params
+                device=torch.device("cuda" if get_attribute("cuda") != -1 and torch.cuda.is_available() else "cpu"),
                 optimizer=optimizer,
-                model_folder=model_folder,
-                tensorboard_folder=tensorboard_folder,
-                LOCAL=LOCAL)
+                param_list=param_list,
+                param_index=param_index,
+                retain_samples_used_for_update=args.retain_samples_used_for_update,
+                history_path=history_path,
+                future_path=future_path,
+                user_to_unlearning_items=user_to_unlearning_items,
+                trainable_cleaned_unlearn_user_ids=clean_user_ids,
+            )
+
+        epoch_elapsed = time.perf_counter() - epoch_start
+        print(f"Epoch {i} took {epoch_elapsed:.2f} s")
+
+        if i in checkpoint_idxs:
+            unlearn_str = (
+                f"_sensitive_category_{args.sensitive_category}"
+                f"_unlearning_fraction_{args.unlearning_fraction}"
+                f"_unlearning_algorithm_{args.unlearning_algorithm}"
+            )
+            model_path = f'{model_folder}/unlearn_model_best_epoch_{i}_seed_{args.seed}{unlearn_str}.pkl'
+            save_model(model, model_path)
+            print(f"saved model at checkpoint with idx: {i}")
+    
+    total_elapsed = time.perf_counter() - script_start
+    print(f"All done in {total_elapsed:.2f} s")
+
+    print("Evaluating the test set")
+
+    for i in checkpoint_idxs:
+        unlearn_str = (
+            f"_sensitive_category_{args.sensitive_category}"
+            f"_unlearning_fraction_{args.unlearning_fraction}"
+            f"_unlearning_algorithm_{args.unlearning_algorithm}"
+        )
+        model_path = f'{model_folder}/unlearn_model_best_epoch_{i}_seed_{args.seed}{unlearn_str}.pkl'
+        scores = evaluate_best_model(
+            model=model,
+            args=args,
+            users_in_unlearning_set=unlearning_user_ids,
+            user_to_unlearning_items=user_to_unlearning_items,
+            model_path=model_path,
+            retrain_str="",
+            model_folder=model_folder,
+            temporal_split=temporal_split,
+            retrain_flag=True,
+        )
+        print("\n\n")
 
 
 if __name__ == '__main__':

@@ -17,6 +17,8 @@ import warnings
 import numpy as np
 
 
+
+
 def train_model(model: nn.Module,
                 train_data_loader: DataLoader,
                 valid_data_loader: DataLoader,
@@ -119,7 +121,7 @@ def train_model(model: nn.Module,
 
                     best_model_path = f'{model_folder}/model_best_seed_{seed}{retrain_str}.pkl'
                     save_model(model, best_model_path)
-                    print(f"model save as {best_model_path}")
+                    print(f"model saved as {best_model_path}")
                     
 
         scheduler.step(loss_dict['train'])

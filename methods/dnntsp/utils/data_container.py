@@ -233,7 +233,7 @@ def get_data_loader(history_path, future_path, keyset_path, data_type, batch_siz
 
 
 
-def get_data_loader_temporal_split(history_path, future_path, data_type, batch_size, item_embedding_matrix, retrain_flag=False, users_in_unlearning_set=None, user_to_unlearning_items=None,):
+def get_data_loader_temporal_split(history_path, future_path, data_type, batch_size, item_embedding_matrix, retrain_flag=False, users_in_unlearning_set=None, user_to_unlearning_items=None, shuffle=False, unlearn_set_flag=False, user_subset=None,):
     """
     Args:
         data_path: str
@@ -251,11 +251,13 @@ def get_data_loader_temporal_split(history_path, future_path, data_type, batch_s
         retrain_flag=retrain_flag,
         users_in_unlearning_set=users_in_unlearning_set,
         user_to_unlearning_items=user_to_unlearning_items,
+        unlearn_set_flag=unlearn_set_flag,
+        user_subset=user_subset,
     )
     print(f'{data_type} data length -> {len(dataset)}')
     data_loader = DataLoader(dataset=dataset,
                              batch_size=batch_size,
-                             shuffle=False,
+                             shuffle=shuffle,
                              drop_last=False,
                              collate_fn=collate_set_across_user)
     return data_loader
@@ -271,6 +273,8 @@ class TemporalSplitSetDataset(SetDataset):
         retrain_flag=False,
         users_in_unlearning_set=None,
         user_to_unlearning_items=None,
+        unlearn_set_flag=False,
+        user_subset=None,
     ):
         """
         Args:
@@ -296,6 +300,7 @@ class TemporalSplitSetDataset(SetDataset):
 
         # use all users
         user_list = sorted(data_future.keys(), key=int)
+        non_unlearn_users = []
 
         if key is None:
             for key in ['train', 'val', 'test']:
@@ -316,14 +321,20 @@ class TemporalSplitSetDataset(SetDataset):
                         print(f"Invalid key name for dataset creation: key = {key}", file=sys.stderr)
                         sys.exit(10)
         else:
-            unlear_user_set = set(users_in_unlearning_set)
+            if unlearn_set_flag:
+                user_list = users_in_unlearning_set
+            elif user_subset is not None:
+                user_list = user_subset
+
+            unlearn_user_set = set(users_in_unlearning_set)
+
             for user in user_list:
                 h_basket = data_history[user][1:-1]
                 f_basket = data_future[user][1]
                 h_basket.append(f_basket)
                 
                 # if we retrain filter out items we want to unlearn
-                if retrain_flag and user in unlear_user_set:
+                if retrain_flag and user in unlearn_user_set:
                     h_basket = list(filter(lambda x: len(x) > 0, [[item for item in basket if item not in user_to_unlearning_items[user]] for basket in h_basket]))
 
                 # do not include users where we can't have train, valid, test data
@@ -340,4 +351,3 @@ class TemporalSplitSetDataset(SetDataset):
                     sys.exit(10)
                 
                 self.data_list.append(user_data)
-        

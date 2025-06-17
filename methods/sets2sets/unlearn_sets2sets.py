@@ -8,7 +8,7 @@ import kookmin
 import fanchuan
 
 
-
+learning_rate = 0.001
 
 
 
@@ -227,12 +227,15 @@ def _evaluate_and_print(paths, history_data, future_data, input_size,
 
 
 def unlearnIters(data_history, data_future, output_size, encoder, decoder, model_name, training_key_set, val_keyset, retain_key_set, codes_inverse_freq, next_k_step,
-               n_iters, top_k, seed, temporal_split, LOCAL, user_to_unlearning_items, unlearning_algorithm, constrastive_retain_batchsize=16, args=None):
+               n_iters, top_k, seed, temporal_split, LOCAL, user_to_unlearning_items, unlearning_algorithm, constrastive_retain_batchsize=16, args=None, learning_rate=0.001):
     start = time.time()
     start_perf = time.perf_counter()
     print_loss_total = 0  # Reset every print_every
     # elem_wise_connection.initWeight()
 
+    # scale down learning rate for all parameters. when we reinitialize some parameters it gets scaled up for them
+    if unlearning_algorithm == "kookmin":
+        learning_rate *= 0.1
     encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=learning_rate, betas=(0.9, 0.98), eps=1e-11,
                                          weight_decay=0)
     decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=learning_rate, betas=(0.9, 0.98), eps=1e-11,
