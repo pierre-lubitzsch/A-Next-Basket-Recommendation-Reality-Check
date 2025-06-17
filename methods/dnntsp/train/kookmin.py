@@ -233,7 +233,7 @@ def unlearn_by_reinit_and_finetune(
             continue
 
         # actually re-init those positions
-        new_p = torch.empty_like(p.data)
+        new_p = torch.empty_like(p.data, device=device)
         if p.dim() == 4:
             init.kaiming_normal_(new_p, mode="fan_out", nonlinearity="relu")
         elif p.dim() == 2:
@@ -241,6 +241,7 @@ def unlearn_by_reinit_and_finetune(
         else:
             new_p.normal_(0,0.02)
 
+        p.data = p.data.to(device)
         p.data[mask] = new_p[mask]
 
         # remember this mask
