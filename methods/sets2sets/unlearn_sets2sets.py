@@ -241,7 +241,6 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
     decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=learning_rate, betas=(0.9, 0.98), eps=1e-11,
                                          weight_decay=0)
 
-
     total_iter = 0
     criterion = custom_MultiLabelLoss_torch()
     best_recall = 0.0

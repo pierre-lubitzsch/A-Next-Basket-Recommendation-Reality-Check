@@ -95,6 +95,12 @@ def _reset_adam_state(opt: torch.optim.Adam, params: List[torch.Tensor]):
             opt.state[p]['exp_avg_sq'].zero_()
 
 
+def move_optimizer_state(optimizer, device):
+    for state in optimizer.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.to(device)
+
 def unlearn_by_reinit_and_finetune(
     *,
     unlearning_user_ids: List[str],
@@ -128,6 +134,9 @@ def unlearn_by_reinit_and_finetune(
 
     encoder.to(device).train()
     decoder.to(device).train()
+
+    move_optimizer_state(encoder_optimizer, device)
+    move_optimizer_state(decoder_optimizer, device)
 
     def make_pair(u, sensitive_included):
         if temporal_split:
