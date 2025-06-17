@@ -42,7 +42,7 @@ class temporal_set_prediction(nn.Module):
         self.fc_output = nn.Linear(item_embedding_dim, 1)
 
     def forward(self, graph, nodes_feature: torch.Tensor, edges_weight: torch.Tensor,
-                lengths: torch.Tensor, nodes: torch.Tensor, users_frequency: torch.Tensor):
+                lengths: torch.Tensor, nodes: torch.Tensor, users_frequency: torch.Tensor, return_embedding=False):
         """
 
         :param graph: batched graphs, with the total number of nodes is `node_num`,
@@ -65,7 +65,13 @@ class temporal_set_prediction(nn.Module):
         # (batch_size, items_total, item_embed_dim)
         nodes_output = self.global_gated_update(graph, nodes, nodes_output)
 
+        if return_embedding:
+            user_embed = nodes_output.mean(dim=1)
+
         # (batch_size, items_total)
         output = self.fc_output(nodes_output).squeeze(dim=-1)
 
-        return output
+        if return_embedding:
+            return output, user_embed
+        else:
+            return output

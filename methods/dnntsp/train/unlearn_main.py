@@ -29,6 +29,7 @@ import time
 
 import scif
 import kookmin
+import fanchuan
 
 
 def set_seed(seed: int) -> None:
@@ -85,7 +86,7 @@ def parse_args():
         type=str,
         default="scif",
         choices=[
-            "neurips_competition_iterative_contrastive",
+            "fanchuan",
             "scif",
             "kookmin",
         ],
@@ -277,7 +278,18 @@ def unlearn(save_model_folder, history_path, future_path, keyset_path, item_embe
                 user_to_unlearning_items=user_to_unlearning_items,
             )
         elif args.unlearning_algorithm == "fanchuan":
-            pass
+            fanchuan.unlearn_neurips_iterative_contrastive(
+                model=model,
+                optimizer=optimizer,
+                device=torch.device("cuda" if get_attribute("cuda") != -1 and torch.cuda.is_available() else "cpu"),
+                LOCAL=LOCAL,
+                history_path=history_path,
+                future_path=future_path,
+                unlearning_user_ids=cur_unlearning_user_ids,
+                retain_user_ids=retain_user_ids,
+                user_to_unlearning_items=user_to_unlearning_items,
+                trainable_cleaned_unlearn_user_ids=clean_user_ids,
+            )
         elif args.unlearning_algorithm == "kookmin":
             kookmin.unlearn_by_reinit_and_finetune(
                 unlearning_user_ids=cur_unlearning_user_ids,
