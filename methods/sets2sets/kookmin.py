@@ -228,7 +228,7 @@ def unlearn_by_reinit_and_finetune(
             continue
 
         # make a freshly initialized tensor of the same shape
-        new_p = torch.empty_like(p.data)
+        new_p = torch.empty_like(p.data, device=device)
         if p.dim() == 4:            # e.g. Conv2d weight
             nn.init.kaiming_normal_(new_p, mode="fan_out", nonlinearity="relu")
         elif p.dim() == 2:          # e.g. Linear weight
@@ -237,6 +237,7 @@ def unlearn_by_reinit_and_finetune(
             new_p.normal_(0, 0.02)
 
         # overwrite only the “low-grad” slots
+        p.data = p.data.to(device)
         p.data[mask] = new_p[mask]
 
         # store the mask to use later
