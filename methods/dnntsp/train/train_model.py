@@ -114,10 +114,13 @@ def train_model(model: nn.Module,
                     validate_max_ndcg = validate_ndcg
                     # model_path = f"{model_folder}/model_epoch_{epoch}.pkl"
                     model_path = f'{model_folder}/model_epoch_{epoch}_seed_{seed}{retrain_str}.pkl'
+                    # save_model(model, model_path)
+                    # print(f"model save as {model_path}")
+
                     best_model_path = f'{model_folder}/model_best_seed_{seed}{retrain_str}.pkl'
-                    save_model(model, model_path)
                     save_model(model, best_model_path)
-                    print(f"model save as {model_path}")
+                    print(f"model save as {best_model_path}")
+                    
 
         scheduler.step(loss_dict['train'])
         sys.stdout.flush()
