@@ -236,6 +236,11 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
     # scale down learning rate for all parameters. when we reinitialize some parameters it gets scaled up for them
     if unlearning_algorithm == "kookmin":
         learning_rate *= 0.1
+
+    device = torch.device("cuda" if use_cuda else "cpu")
+    encoder = encoder.to(device)
+    decoder = decoder.to(device)
+
     encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=learning_rate, betas=(0.9, 0.98), eps=1e-11,
                                          weight_decay=0)
     decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=learning_rate, betas=(0.9, 0.98), eps=1e-11,
