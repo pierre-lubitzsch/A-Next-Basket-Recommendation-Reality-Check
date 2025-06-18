@@ -70,7 +70,7 @@ def _mean_abs(t: torch.Tensor) -> torch.Tensor:
 def _reset_adam_state(opt: torch.optim.Adam, params: List[torch.Tensor]):
     for p in params:
         if p in opt.state:
-            opt.state[p]['step'] = torch.zeros(1, dtype=torch.int64, device=p.device)
+            opt.state[p]['step'] = torch.zeros(1, dtype=torch.float32, device=p.device)
             opt.state[p]['exp_avg'].zero_()
             opt.state[p]['exp_avg_sq'].zero_()
 
