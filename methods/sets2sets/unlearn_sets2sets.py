@@ -78,7 +78,7 @@ def parse_args():
         type=str,
         default="scif",
         choices=[
-            "neurips_competition_iterative_contrastive",
+            "fanchuan",
             "scif",
             "kookmin",
         ],
@@ -302,7 +302,7 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
         if user in clean_data_history_and_future.keys():
             cur_clean_data_history_and_future[user] = clean_data_history_and_future[user]
 
-        if unlearning_algorithm == "neurips_competition_iterative_contrastive":
+        if unlearning_algorithm == "fanchuan":
             fanchuan.unlearn_neurips_competition_iterative_contrastive(
                 cur_unlearning_user_ids,
                 retain_user_ids,
