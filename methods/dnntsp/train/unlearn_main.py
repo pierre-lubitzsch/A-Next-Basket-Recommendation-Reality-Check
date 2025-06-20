@@ -248,6 +248,9 @@ def unlearn(save_model_folder, history_path, future_path, keyset_path, item_embe
         h_baskets = data_history[user][1:-1]
         # append their future basket so we get the full sequence
         h_baskets = h_baskets + [data_future[user][1]]
+        # we chose a user which was filtered out
+        if len(h_baskets) < 4:
+            continue
         h_baskets = [[item for item in basket if item not in user_to_unlearning_items[user]] for basket in h_baskets]
         h_baskets = [basket for basket in h_baskets if len(basket) > 0]
         # scif doesn't remove any items from h_baskets (retrain_flag=False)
@@ -322,6 +325,8 @@ def unlearn(save_model_folder, history_path, future_path, keyset_path, item_embe
             model_path = f'{model_folder}/unlearn_model_best_epoch_{i}_seed_{args.seed}{unlearn_str}.pkl'
             save_model(model, model_path)
             print(f"saved model at checkpoint with idx: {i}")
+        
+        sys.stdout.flush()
     
     total_elapsed = time.perf_counter() - script_start
     print(f"All done in {total_elapsed:.2f} s")

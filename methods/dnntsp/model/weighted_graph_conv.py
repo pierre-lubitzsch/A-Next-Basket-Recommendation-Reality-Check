@@ -134,9 +134,23 @@ class weighted_GCN(nn.Module):
         for gcn, relu, bn in zip(self.gcns, self.relus, self.bns):
             # (n_1+n_2+..., T, features)
             h = gcn(graph, h, edges_weight)
-            h = bn(h.transpose(1, -1)).transpose(1, -1)
+            
+            h = h.transpose(1, -1)
+
+            # need this when only 1 item is in the combined baskets
+            if h.size(-1) > 1:
+                h = bn(h)                       # normal BN update
+            else:
+                h = torch.nn.functional.batch_norm(
+                    h, bn.running_mean, bn.running_var,
+                    bn.weight, bn.bias,
+                    training=False,
+                    eps=bn.eps,
+                )
+            h = h.transpose(1, -1)
             h = relu(h)
         return h
+
 
 
 class stacked_weighted_GCN_blocks(nn.ModuleList):
