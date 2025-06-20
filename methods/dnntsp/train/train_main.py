@@ -212,7 +212,7 @@ def evaluate_best_model(model,
     for k in [10, 20]:
         r = scores.get(f"recall_{k}")
         n = scores.get(f"ndcg_{k}")
-        h = scores.get(f"hitrate_{k}") or scores.get(f"hit_rate_{k}")
+        h = scores.get(f"PHR_{k}")
         print(f"--- Test @ {k} ---")
         if r is not None: print(f"Recall@{k}:  {r:.4f}")
         if n is not None: print(f"NDCG@{k}:    {n:.4f}")
