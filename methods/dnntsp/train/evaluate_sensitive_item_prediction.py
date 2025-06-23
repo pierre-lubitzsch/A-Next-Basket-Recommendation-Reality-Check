@@ -186,7 +186,7 @@ def main():
     # --------------------------------------------------
     # write CSV
     # --------------------------------------------------
-    out_csv = "sensitive_predictions_summary.csv"
+    out_csv = root / "sensitive_predictions_summary.csv"
     pd.DataFrame(summary_rows).to_csv(out_csv, index=False)
     print(f"\nSummary written to {out_csv}")
 
