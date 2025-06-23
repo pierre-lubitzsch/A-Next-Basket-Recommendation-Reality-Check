@@ -241,7 +241,7 @@ def scif_unlearn(
     retain_pairs_sampled = unlearn_samples_corrected + more_retain_samples_needed
 
     pos_grads = _batch_grad(encoder, decoder, retain_pairs_sampled, param_list,
-                            codes_inverse_freq, criterion, output_size, max_len, batch_size)
+                            codes_inverse_freq, criterion, output_size, max_len, average_scale=batch_size)
 
     grads = [n + p for n, p in zip(neg_grads, pos_grads)]
 

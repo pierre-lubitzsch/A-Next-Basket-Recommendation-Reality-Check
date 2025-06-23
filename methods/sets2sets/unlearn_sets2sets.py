@@ -6,6 +6,7 @@ import torch
 import scif
 import kookmin
 import fanchuan
+import pandas as pd
 
 
 learning_rate = 0.001
@@ -185,10 +186,8 @@ def _find_trained_models(args, model_version, seed):
                     dec_paths.append(dec)
 
     return enc_paths, dec_paths
-# ---------------------------------------------------------------------------
 
 
-# --- generic evaluation routine --------------------------------------
 def _evaluate_and_print(paths, history_data, future_data, input_size,
                         val_users, test_users, next_k_step,
                         topk_list, temporal_split):
@@ -196,6 +195,8 @@ def _evaluate_and_print(paths, history_data, future_data, input_size,
     paths: list[(encoder_path, decoder_path)]
     prints results for every (enc, dec) pair found in *paths*.
     """
+    results = []
+
     for k in topk_list:
         print("=" * 80)
         print(f" Top-{k} evaluation")
@@ -209,7 +210,7 @@ def _evaluate_and_print(paths, history_data, future_data, input_size,
             with torch.no_grad():
                 val_metrics  = evaluate(history_data, future_data, encoder, decoder,
                                         input_size, val_users,  next_k_step, k,
-                                        test_flag=True, temporal_split=temporal_split)
+                                        test_flag=False, temporal_split=temporal_split)
                 test_metrics = evaluate(history_data, future_data, encoder, decoder,
                                         input_size, test_users, next_k_step, k,
                                         test_flag=True, temporal_split=temporal_split)
@@ -218,8 +219,10 @@ def _evaluate_and_print(paths, history_data, future_data, input_size,
             tr, tn, th  = test_metrics
             print(f"  • VAL   – Recall:{vr:.4f}  NDCG:{vn:.4f}  HR:{vh:.4f}")
             print(f"  • TEST  – Recall:{tr:.4f}  NDCG:{tn:.4f}  HR:{th:.4f}")
-        print()  # blank line after each k
-# ---------------------------------------------------------------------------
+            results.append((k, enc_p, tr, tn, th))
+        print()
+    
+    return results
 
 
 
