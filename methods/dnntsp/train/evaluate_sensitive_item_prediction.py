@@ -180,6 +180,7 @@ def main():
 
             # clean up GPU memory before the next run
             del model
+            del test_loader
             torch.cuda.empty_cache()
 
     # --------------------------------------------------
