@@ -132,7 +132,7 @@ def main():
     ap.add_argument("--root", required=True, help="dataset folder (e.g. .../Instacart)")
     ap.add_argument("--history_path", required=True)
     ap.add_argument("--future_path", required=True)
-    ap.add_argument("--batch_size", type=int, default=256)
+    ap.add_argument("--batch_size", type=int, default=64)
     ap.add_argument("--item_embed_dim", type=int, default=32)
     ap.add_argument("--top_k", type=int, default=20)
     args = ap.parse_args()
@@ -182,6 +182,7 @@ def main():
             del model
             del test_loader
             torch.cuda.empty_cache()
+            sys.stdout.flush()
 
     # --------------------------------------------------
     # write CSV
