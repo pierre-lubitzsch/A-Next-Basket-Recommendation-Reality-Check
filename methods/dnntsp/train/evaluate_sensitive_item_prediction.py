@@ -1,22 +1,14 @@
 #!/usr/bin/env python3
 """
-Walk through every un-learning run below --root and count how many
-sensitive items still appear in the model’s top-k predictions.
+Walk through every un-learning run below --root and count **how many users**
+still receive at least one sensitive item in their top-k predictions.
 """
 
-import argparse
-import os
-import re
-import pickle
-import glob
-import sys
+import argparse, os, re, pickle, glob, sys
 from pathlib import Path
+import pandas as pd, torch, tqdm
 
-import pandas as pd
-import torch
-import tqdm
-
-sys.path.append("..")                       # project’s root
+sys.path.append("..")
 
 from utils.load_config import get_attribute
 from utils.util import convert_to_gpu, convert_all_data_to_gpu, load_model
@@ -26,110 +18,80 @@ from utils.data_container import get_data_loader_temporal_split
 # ----------------------------------------------------------------------
 # discovery helpers
 # ----------------------------------------------------------------------
-CKPT_RGX = (
-    r"unlearn_model_best_epoch_(\d+)_seed_(\d+)"
-    r"_sensitive_category_([\w\-]+)"
-    r"_unlearning_fraction_([\d\.]+)"
-    r"_unlearning_algorithm_([\w\-]+)\.pkl"
-)
-
+CKPT_RGX = (r"unlearn_model_best_epoch_(\d+)_seed_(\d+)"
+            r"_sensitive_category_([\w\-]+)"
+            r"_unlearning_fraction_([\d\.]+)"
+            r"_unlearning_algorithm_([\w\-]+)\.pkl")
 
 def list_run_dirs(root: Path):
-    """
-    Yield every sub-directory under *root* that contains at least one
-    checkpoint matching our naming convention.  If *root* itself already
-    contains checkpoints, it is yielded as well.
-    """
-    for path in [root] + [p for p in root.iterdir() if p.is_dir()]:
-        if any(re.match(CKPT_RGX, f.name) for f in path.glob("*.pkl")):
-            yield path
+    for p in [root] + [d for d in root.iterdir() if d.is_dir()]:
+        if any(re.match(CKPT_RGX, f.name) for f in p.glob("*.pkl")):
+            yield p
 
+def discover_ckpts(run_dir: Path):
+    pat = run_dir / ("unlearn_model_best_epoch_*_seed_*_sensitive_category_*"
+                     "_unlearning_fraction_*_unlearning_algorithm_*.pkl")
+    return sorted(glob.glob(str(pat)))
 
-def discover_model_files(run_dir: Path):
-    """All unlearning checkpoints inside *run_dir* (non-recursive)."""
-    pattern = run_dir / "unlearn_model_best_epoch_*_seed_*_sensitive_category_*_unlearning_fraction_*_unlearning_algorithm_*.pkl"
-    return sorted(glob.glob(str(pattern)))
-
-
-def parse_filename(fname: str):
+def parse_ckpt(fname):
     m = re.search(CKPT_RGX, os.path.basename(fname))
-    if not m:
-        raise ValueError(f"Cannot parse checkpoint name: {fname}")
-    return dict(
-        epoch=int(m.group(1)),
-        seed=int(m.group(2)),
-        category=m.group(3),
-        unlearning_fraction=float(m.group(4)),
-        algorithm=m.group(5),
-    )
-
+    return dict(epoch=int(m.group(1)), seed=int(m.group(2)),
+                category=m.group(3), unlearning_fraction=float(m.group(4)),
+                algorithm=m.group(5))
 
 # ----------------------------------------------------------------------
-# model + dataset helpers
+# model helpers
 # ----------------------------------------------------------------------
-def build_model(item_embed_dim: int):
-    items_total = get_attribute("items_total")
-    model = temporal_set_prediction(
-        items_total=items_total, item_embedding_dim=item_embed_dim
-    )
-    return convert_to_gpu(model)
+def build_model(embed_dim: int):
+    return convert_to_gpu(temporal_set_prediction(
+        items_total=get_attribute("items_total"),
+        item_embedding_dim=embed_dim))
 
+def load_sensitive_items(ds, seed, frac, cat):
+    fn = (f"../../../unlearning_data/dataset_{ds.lower()}_seed_{seed}"
+          f"_method_sensitive_unlearning_fraction_{frac}.pkl")
+    mapping = pickle.load(open(fn, "rb"))[cat]
+    return set(i for v in mapping.values() for i in v), mapping
 
-def load_sensitive_items(dataset: str, seed: int, unlearning_fraction: float, category: str):
-    pkl = (
-        f"../../../unlearning_data/"
-        f"dataset_{dataset.lower()}_seed_{seed}_method_sensitive"
-        f"_unlearning_fraction_{unlearning_fraction}.pkl"
-    )
-    with open(pkl, "rb") as f:
-        user_to_items = pickle.load(f)[category]
-
-    sensitive = {item for items in user_to_items.values() for item in items}
-    return sensitive, user_to_items
-
-
-def count_sensitive_preds(model, loader, sensitive_items, k: int):
+# ----------------------------------------------------------------------
+# core counting logic
+# ----------------------------------------------------------------------
+def count_sensitive_users(model, loader, sensitive_items, k):
+    """
+    Return (#users with ≥1 sensitive item in top-k, total #users).
+    """
     model.eval()
-    sens, tot = 0, 0
+    n_flagged = n_total = 0
+    sens_set = sensitive_items  # local alias (Python set lookup is fast)
 
     with torch.no_grad():
-        for (
-            g,
-            nodes_feature,
-            edges_weight,
-            lengths,
-            nodes,
-            truth_data,
-            users_frequency,
-        ) in loader:
+        for (g, nf, ew, L, n, y, uf) in loader:
+            # send to GPU
+            g, nf, ew, L, n, y, uf = convert_all_data_to_gpu(
+                g, nf, ew, L, n, y, uf)
 
-            g, nodes_feature, edges_weight, lengths, nodes, truth_data, users_frequency = convert_all_data_to_gpu(
-                g,
-                nodes_feature,
-                edges_weight,
-                lengths,
-                nodes,
-                truth_data,
-                users_frequency,
-            )
+            # forward
+            logits = model(g, nf, ew, L, n, uf)
+            topk = torch.topk(logits, k, dim=1).indices.cpu()  # shape [B, k]
 
-            logits = model(
-                g, nodes_feature, edges_weight, lengths, nodes, users_frequency
-            )
+            # per-row membership test
+            for row in topk:
+                if any(idx.item() in sens_set for idx in row):
+                    n_flagged += 1
+            n_total += topk.size(0)
 
-            topk = torch.topk(logits, k, dim=1).indices.cpu().tolist()
-            sens += sum(item in sensitive_items for row in topk for item in row)
-            tot += k * len(topk)
+            # release GPU memory early
+            del logits, g, nf, ew, L, n, y, uf, topk
+            torch.cuda.empty_cache()
 
-    return sens, tot
-
+    return n_flagged, n_total
 
 # ----------------------------------------------------------------------
-# CLI
+# main
 # ----------------------------------------------------------------------
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--root", required=True, help="dataset folder (e.g. .../Instacart)")
+    ap.add_argument("--root", required=True)
     ap.add_argument("--history_path", required=True)
     ap.add_argument("--future_path", required=True)
     ap.add_argument("--batch_size", type=int, default=64)
@@ -137,60 +99,48 @@ def main():
     ap.add_argument("--top_k", type=int, default=20)
     args = ap.parse_args()
 
-    root = Path(args.root).expanduser().resolve()
-    dataset_name = get_attribute("data")
-    summary_rows = []
+    root = Path(args.root).resolve()
+    ds_name = get_attribute("data")
+    rows = []
 
-    # --------------------------------------------------
-    # iterate over every run directory
-    # --------------------------------------------------
     for run_dir in list_run_dirs(root):
-        for ckpt in discover_model_files(run_dir):
-            meta = parse_filename(ckpt)
+        for ckpt in discover_ckpts(run_dir):
+            meta = parse_ckpt(ckpt)
 
-            # 1) model
             model = build_model(args.item_embed_dim)
             model = load_model(model, ckpt)
 
-            # 2) sensitive item universe
-            sens_items, user_to_unlearning_items = load_sensitive_items(
-                dataset_name,
-                meta["seed"],
-                meta["unlearning_fraction"],
-                meta["category"],
-            )
+            sens_set, user2items = load_sensitive_items(
+                ds_name, meta["seed"], meta["unlearning_fraction"], meta["category"])
 
-            # 3) test loader
-            test_loader = get_data_loader_temporal_split(
+            loader = get_data_loader_temporal_split(
                 history_path=args.history_path,
                 future_path=args.future_path,
                 data_type="test",
                 batch_size=args.batch_size,
                 item_embedding_matrix=model.item_embedding,
                 retrain_flag=True,
-                users_in_unlearning_set=list(user_to_unlearning_items.keys()),
-                user_to_unlearning_items=user_to_unlearning_items,
-            )
+                users_in_unlearning_set=list(user2items.keys()),
+                user_to_unlearning_items=user2items)
 
-            # 4) count
-            s, t = count_sensitive_preds(model, tqdm.tqdm(test_loader, leave=False, disable=True), sens_items, args.top_k)
-            print(f"[{run_dir.name} | {os.path.basename(ckpt)}]  {s}/{t} sensitive (top-{args.top_k})")
+            n_flagged, n_users = count_sensitive_users(
+                model, tqdm.tqdm(loader, leave=False, disable=True),
+                sens_set, args.top_k)
 
-            summary_rows.append({**meta, "run_dir": run_dir.name, "sensitive_predictions": s, "total_predictions": t})
+            print(f"[{run_dir.name} | {os.path.basename(ckpt)}]  "
+                  f"{n_flagged}/{n_users} users flagged (top-{args.top_k})")
 
-            # clean up GPU memory before the next run
-            del model
-            del test_loader
+            rows.append({**meta,
+                         "run_dir": run_dir.name,
+                         "users_with_sensitive_predictions": n_flagged,
+                         "total_users": n_users})
+
+            del model, loader
             torch.cuda.empty_cache()
-            sys.stdout.flush()
 
-    # --------------------------------------------------
-    # write CSV
-    # --------------------------------------------------
     out_csv = root / "sensitive_predictions_summary.csv"
-    pd.DataFrame(summary_rows).to_csv(out_csv, index=False)
-    print(f"\nSummary written to {out_csv}")
-
+    pd.DataFrame(rows).to_csv(out_csv, index=False)
+    print(f"\nSummary saved to {out_csv}")
 
 if __name__ == "__main__":
     main()
