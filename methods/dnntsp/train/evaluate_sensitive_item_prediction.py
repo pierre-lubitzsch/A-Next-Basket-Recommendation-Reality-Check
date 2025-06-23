@@ -173,7 +173,7 @@ def main():
             )
 
             # 4) count
-            s, t = count_sensitive_preds(model, tqdm.tqdm(test_loader, leave=False), sens_items, args.top_k)
+            s, t = count_sensitive_preds(model, tqdm.tqdm(test_loader, leave=False, disable=True), sens_items, args.top_k)
             print(f"[{run_dir.name} | {os.path.basename(ckpt)}]  {s}/{t} sensitive (top-{args.top_k})")
 
             summary_rows.append({**meta, "run_dir": run_dir.name, "sensitive_predictions": s, "total_predictions": t})
