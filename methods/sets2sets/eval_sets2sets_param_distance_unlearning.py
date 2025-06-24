@@ -15,6 +15,8 @@ def unlearn_model_to_retrained_model(unlearn_filename):
     if "unlearn_epoch" not in unlearn_filename:
         return None, None
     unlearn_epochs = int(unlearn_filename.split("unlearn_epoch")[-1].split("_")[0])
+    if unlearn_epochs < 10:
+        return None, None
     if "sensitive" in unlearn_filename:
         category = unlearn_filename.split("sensitive_category_")[-1].split("_")[0]
     
@@ -86,7 +88,6 @@ if __name__ == "__main__":
         
         retrain_encoder_filename, retrain_decoder_filename = unlearn_model_to_retrained_model(filename)
         if retrain_encoder_filename is None or retrain_decoder_filename is None:
-            print(f"Not done for {filename}")
             continue
 
         retrain_encoder_path = f"{directory}/{retrain_encoder_filename}"
