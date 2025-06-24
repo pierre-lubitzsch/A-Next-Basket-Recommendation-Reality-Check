@@ -121,22 +121,20 @@ def main():
                 item_embedding_matrix=model.item_embedding,
                 retrain_flag=True,
                 users_in_unlearning_set=list(user2items.keys()),
-                user_to_unlearning_items=user2items)
+                user_to_unlearning_items=user2items,
+                user_subset=list(user2items.keys()))
 
-            n_flagged, n_users = count_sensitive_users(
-                model, tqdm.tqdm(loader, leave=False, disable=True),
-                sens_set, args.top_k)
+            tqdm_loader = tqdm.tqdm(loader, leave=False, disable=True)
 
-            print(f"[{run_dir.name} | {os.path.basename(ckpt)}]  "
-                  f"{n_flagged}/{n_users} users flagged (top-{args.top_k})")
+            n_flagged, n_users = count_sensitive_users(model, tqdm_loader, sens_set, args.top_k)
 
-            rows.append({**meta,
-                         "run_dir": run_dir.name,
-                         "users_with_sensitive_predictions": n_flagged,
-                         "total_users": n_users})
+            print(f"[{run_dir.name} | {os.path.basename(ckpt)}]\n{n_flagged}/{n_users} users flagged (top-{args.top_k})")
+
+            rows.append({**meta, "run_dir": run_dir.name, "users_with_sensitive_predictions": n_flagged, "total_users": n_users})
 
             del model, loader
             torch.cuda.empty_cache()
+            sys.stdout.flush()
 
     out_csv = root / "sensitive_predictions_summary.csv"
     pd.DataFrame(rows).to_csv(out_csv, index=False)
