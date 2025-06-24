@@ -13,10 +13,10 @@ def unlearn_model_to_retrained_model(unlearn_filename):
     seed = int(unlearn_filename.split("_seed_")[-1].split("_")[0])
     frac = float(unlearn_filename.split("_unlearning_fraction_")[-1].split("_")[0])
     if "unlearn_epoch" not in unlearn_filename:
-        return None, None
+        return None, None, None, None
     unlearn_epochs = int(unlearn_filename.split("unlearn_epoch")[-1].split("_")[0])
     if unlearn_epochs < 10:
-        return None, None
+        return None, None, None, None
     if "sensitive" in unlearn_filename:
         category = unlearn_filename.split("sensitive_category_")[-1].split("_")[0]
     
@@ -34,11 +34,15 @@ def unlearn_model_to_retrained_model(unlearn_filename):
 
     retrain_idx_to_match = checkpoint_idxs.index(unlearn_epochs)
     if retrain_idx_to_match == -1:
-        return None, None
+        return None, None, None, None
     
     encoder_retrain_filename = f"encoder_instacart0_model_best_seed_{seed}_sensitive_category_{category}_unlearning_fraction_{frac}_retrain_checkpoint_idx_to_match_{retrain_idx_to_match}.pt"
     decoder_retrain_filename = f"decoder_instacart0_model_best_seed_{seed}_sensitive_category_{category}_unlearning_fraction_{frac}_retrain_checkpoint_idx_to_match_{retrain_idx_to_match}.pt"
-    return encoder_retrain_filename, decoder_retrain_filename
+    
+    original_encoder_filename = f"encoder_instacart0_model_best_seed_{seed}.pt"
+    original_decoder_filename = f"decoder_instacart0_model_best_seed_{seed}.pt"
+    
+    return encoder_retrain_filename, decoder_retrain_filename, original_encoder_filename, original_decoder_filename
 
 
 
@@ -86,12 +90,15 @@ if __name__ == "__main__":
         encoder_path = f"{directory}/{encoder_filename}"
         decoder_path = f"{directory}/{decoder_filename}"
         
-        retrain_encoder_filename, retrain_decoder_filename = unlearn_model_to_retrained_model(filename)
+        retrain_encoder_filename, retrain_decoder_filename, original_encoder_filename, original_decoder_filename = unlearn_model_to_retrained_model(filename)
         if retrain_encoder_filename is None or retrain_decoder_filename is None:
             continue
 
         retrain_encoder_path = f"{directory}/{retrain_encoder_filename}"
         retrain_decoder_path = f"{directory}/{retrain_decoder_filename}"
+
+        original_encoder_path = f"{directory}/{original_encoder_filename}"
+        original_decoder_path = f"{directory}/{original_decoder_filename}"
 
         unlearned_encoder = torch.load(encoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
         unlearned_decoder = torch.load(decoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
@@ -99,17 +106,25 @@ if __name__ == "__main__":
         retrained_encoder = torch.load(retrain_encoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
         retrained_decoder = torch.load(retrain_decoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
 
-        param_distance = coupled_distance(unlearned_encoder, unlearned_decoder, retrained_encoder, retrained_decoder)
+        original_encoder = torch.load(original_encoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
+        original_decoder = torch.load(original_decoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
 
-        results.append([encoder_path, retrain_encoder_filename, param_distance])
+        param_distance_unlearned_retrained = coupled_distance(unlearned_encoder, unlearned_decoder, retrained_encoder, retrained_decoder)
+        param_distance_original_retrained = coupled_distance(original_encoder, original_decoder, retrained_encoder, retrained_decoder)
+        param_distance_unlearned_original = coupled_distance(unlearned_encoder, unlearned_decoder, original_encoder, original_decoder)
+
+        results.append([encoder_filename, retrain_encoder_filename, original_encoder_filename, param_distance_unlearned_retrained, param_distance_original_retrained, param_distance_unlearned_original])
         print(f"Unlearned encoder: {encoder_filename}")
         print(f"Retrained encoder: {retrain_encoder_filename}")
-        print(f"Parameter distance: {param_distance}\n")
+        print(f"Original encoder: {original_encoder_filename}")
+        print(f"Parameter distance unlearned vs retrained: {param_distance_unlearned_retrained}\n")
+        print(f"Parameter distance original vs retrained: {param_distance_original_retrained}")
+        print(f"Parameter distance unlearned vs original: {param_distance_unlearned_original}")
         sys.stdout.flush()
 
 
     out_file = f"{directory}/sets2sets_param_distances.csv"
     with open(out_file, "w") as f:
         writer = csv.writer(f)
-        writer.writerow(["unlearned_encoder", "retrained_encoder", "parameter_mse"])
+        writer.writerow(["unlearned_encoder", "retrained_encoder", "original encoder", "unlearned_vs_retrained_mse", "original_vs_retrained_mse", "unlearned_vs_original_mse"])
         writer.writerows(results)
