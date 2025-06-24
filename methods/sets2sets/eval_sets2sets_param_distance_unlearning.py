@@ -4,6 +4,7 @@ import os
 import torch
 from torch.nn.utils import parameters_to_vector
 import csv
+import sys
 
 
 
@@ -15,8 +16,6 @@ def unlearn_model_to_retrained_model(unlearn_filename):
     if "sensitive" in unlearn_filename:
         category = unlearn_filename.split("sensitive_category_")[-1].split("_")[0]
     
-    print(unlearn_filename)
-
     with open(f"../../unlearning_data/dataset_{ds.lower()}_seed_{seed}_method_sensitive_unlearning_fraction_{frac}.pkl", "rb") as f:
         unlearn_users_to_items = pickle.load(f)
         if "sensitive" in unlearn_filename:
@@ -99,6 +98,10 @@ if __name__ == "__main__":
         param_distance = coupled_distance(unlearned_encoder, unlearned_decoder, retrained_encoder, retrained_decoder)
 
         results.append([encoder_path, retrain_encoder_filename, param_distance])
+        print(encoder_filename)
+        print(retrain_encoder_filename)
+        print(param_distance, "\n")
+        sys.stdout.flush()
 
 
     out_file = f"{directory}/sets2sets_param_distances.csv"
