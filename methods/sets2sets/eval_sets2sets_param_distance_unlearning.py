@@ -119,9 +119,9 @@ if __name__ == "__main__":
         print(f"Unlearned encoder: {encoder_filename}")
         print(f"Retrained encoder: {retrain_encoder_filename}")
         print(f"Original encoder: {original_encoder_filename}")
-        print(f"Parameter distance unlearned vs retrained: {param_distance_unlearned_retrained}\n")
+        print(f"Parameter distance unlearned vs retrained: {param_distance_unlearned_retrained}")
         print(f"Parameter distance original vs retrained: {param_distance_original_retrained}")
-        print(f"Parameter distance unlearned vs original: {param_distance_unlearned_original}")
+        print(f"Parameter distance unlearned vs original: {param_distance_unlearned_original}\n\n")
         sys.stdout.flush()
 
 
