@@ -68,14 +68,13 @@ if __name__ == "__main__":
 
     directory = "./models"
     for filename in os.listdir(directory):
-        if "decoder" in filename:
+        if "decoder" in filename or "unlearn" not in filename or "unlearning_fraction_0.001" not in filename:
             continue
 
         encoder_path = filename
         decoder_path = filename.replace("encoder", "decoder")
         retrain_encoder_filename, retrain_decoder_filename = unlearn_model_to_retrained_model(filename)
         if retrain_encoder_filename is None or retrain_decoder_filename is None:
-            print(f"Skipping {filename}, fitting retrained models not found.")
             continue
 
         unlearned_encoder = torch.load(encoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
