@@ -7,6 +7,8 @@ import csv
 import sys
 
 
+from sets2sets_new import EncoderRNN_new, AttnDecoderRNN_new
+
 
 def unlearn_model_to_retrained_model(unlearn_filename):
     ds = "Instacart"
@@ -100,14 +102,14 @@ if __name__ == "__main__":
         original_encoder_path = f"{directory}/{original_encoder_filename}"
         original_decoder_path = f"{directory}/{original_decoder_filename}"
 
+        original_encoder = torch.load(original_encoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
+        original_decoder = torch.load(original_decoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
+
         unlearned_encoder = torch.load(encoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
         unlearned_decoder = torch.load(decoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
 
         retrained_encoder = torch.load(retrain_encoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
         retrained_decoder = torch.load(retrain_decoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
-
-        original_encoder = torch.load(original_encoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
-        original_decoder = torch.load(original_decoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
 
         param_distance_unlearned_retrained = coupled_distance(unlearned_encoder, unlearned_decoder, retrained_encoder, retrained_decoder)
         param_distance_original_retrained = coupled_distance(original_encoder, original_decoder, retrained_encoder, retrained_decoder)
