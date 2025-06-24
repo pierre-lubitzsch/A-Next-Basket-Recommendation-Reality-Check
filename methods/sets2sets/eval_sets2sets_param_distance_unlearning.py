@@ -12,24 +12,29 @@ def unlearn_model_to_retrained_model(unlearn_filename):
     seed = int(unlearn_filename.split("_seed_")[-1].split("_")[0])
     frac = float(unlearn_filename.split("_unlearning_fraction_")[-1].split("_")[0])
     unlearn_epochs = int(unlearn_filename.split("unlearn_epoch")[-1].split("_")[0])
+    if "sensitive" in unlearn_filename:
+        category = unlearn_filename.split("sensitive_category_")[-1].split("_")[0]
     
     print(unlearn_filename)
 
     with open(f"../../unlearning_data/dataset_{ds.lower()}_seed_{seed}_method_sensitive_unlearning_fraction_{frac}.pkl", "rb") as f:
         unlearn_users_to_items = pickle.load(f)
+        if "sensitive" in unlearn_filename:
+            unlearn_users_to_items = unlearn_users_to_items[category]
+
 
     n = len(unlearn_users_to_items)
     checkpoint_every = math.ceil(n / 4)
     checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 5 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 5 and i == n - 1))]
     if len(checkpoint_idxs) == 5:
         checkpoint_idxs = checkpoint_idxs[:4] + [checkpoint_idxs[-1]]
-    
+
     retrain_idx_to_match = checkpoint_idxs.index(unlearn_epochs)
     if retrain_idx_to_match == -1:
         return None, None
     
-    encoder_retrain_filename = f"encoder_instacart0_model_best_seed_{seed}_sensitive_category_{ds.lower()}_retrain_checkpoint_idx_to_match_{retrain_idx_to_match}.pt"
-    decoder_retrain_filename = f"decoder_instacart0_model_best_seed_{seed}_sensitive_category_{ds.lower()}_retrain_checkpoint_idx_to_match_{retrain_idx_to_match}.pt"
+    encoder_retrain_filename = f"encoder_instacart0_model_best_seed_{seed}_sensitive_category_{category}_unlearning_fraction_{frac}_retrain_checkpoint_idx_to_match_{retrain_idx_to_match}.pt"
+    decoder_retrain_filename = f"decoder_instacart0_model_best_seed_{seed}_sensitive_category_{category}_unlearning_fraction_{frac}_retrain_checkpoint_idx_to_match_{retrain_idx_to_match}.pt"
     return encoder_retrain_filename, decoder_retrain_filename
 
 
@@ -72,17 +77,24 @@ if __name__ == "__main__":
         if "decoder" in filename or "unlearn" not in filename or "unlearning_fraction_0.001" not in filename:
             continue
 
-        encoder_path = filename
-        decoder_path = filename.replace("encoder", "decoder")
+        encoder_filename = filename
+        decoder_filename = filename.replace("encoder", "decoder")
+
+        encoder_path = f"{directory}/{encoder_filename}"
+        decoder_path = f"{directory}/{decoder_filename}"
+        
         retrain_encoder_filename, retrain_decoder_filename = unlearn_model_to_retrained_model(filename)
         if retrain_encoder_filename is None or retrain_decoder_filename is None:
             continue
 
+        retrain_encoder_path = f"{directory}/{retrain_encoder_filename}"
+        retrain_decoder_path = f"{directory}/{retrain_decoder_filename}"
+
         unlearned_encoder = torch.load(encoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
         unlearned_decoder = torch.load(decoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
 
-        retrained_encoder = torch.load(retrain_encoder_filename, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
-        retrained_decoder = torch.load(retrain_decoder_filename, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
+        retrained_encoder = torch.load(retrain_encoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
+        retrained_decoder = torch.load(retrain_decoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
 
         param_distance = coupled_distance(unlearned_encoder, unlearned_decoder, retrained_encoder, retrained_decoder)
 
