@@ -11,7 +11,7 @@ def unlearn_model_to_retrained_model(unlearn_filename):
     ds = "Instacart"
     seed = int(unlearn_filename.split("_seed_")[-1].split("_")[0])
     frac = float(unlearn_filename.split("_unlearning_fraction_")[-1].split("_")[0])
-    unlearn_epochs = int(unlearn_filename.split("_epoch_")[-1].split("_")[0])
+    unlearn_epochs = int(unlearn_filename.split("unlearn_epoch")[-1].split("_")[0])
 
     with open(f"../../unlearning_data/dataset_{ds.lower()}_seed_{seed}"
           f"_method_sensitive_unlearning_fraction_{frac}.pkl") as f:
