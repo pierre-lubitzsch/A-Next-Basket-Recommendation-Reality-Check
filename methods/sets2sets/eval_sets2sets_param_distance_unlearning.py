@@ -12,6 +12,8 @@ def unlearn_model_to_retrained_model(unlearn_filename):
     ds = "Instacart"
     seed = int(unlearn_filename.split("_seed_")[-1].split("_")[0])
     frac = float(unlearn_filename.split("_unlearning_fraction_")[-1].split("_")[0])
+    if "unlearn_epoch" not in unlearn_filename:
+        return None, None
     unlearn_epochs = int(unlearn_filename.split("unlearn_epoch")[-1].split("_")[0])
     if "sensitive" in unlearn_filename:
         category = unlearn_filename.split("sensitive_category_")[-1].split("_")[0]
@@ -84,6 +86,7 @@ if __name__ == "__main__":
         
         retrain_encoder_filename, retrain_decoder_filename = unlearn_model_to_retrained_model(filename)
         if retrain_encoder_filename is None or retrain_decoder_filename is None:
+            print(f"Not done for {filename}")
             continue
 
         retrain_encoder_path = f"{directory}/{retrain_encoder_filename}"
@@ -98,14 +101,14 @@ if __name__ == "__main__":
         param_distance = coupled_distance(unlearned_encoder, unlearned_decoder, retrained_encoder, retrained_decoder)
 
         results.append([encoder_path, retrain_encoder_filename, param_distance])
-        print(encoder_filename)
-        print(retrain_encoder_filename)
-        print(param_distance, "\n")
+        print(f"Unlearned encoder: {encoder_filename}")
+        print(f"Retrained encoder: {retrain_encoder_filename}")
+        print(f"Parameter distance: {param_distance}\n")
         sys.stdout.flush()
 
 
     out_file = f"{directory}/sets2sets_param_distances.csv"
     with open(out_file, "w") as f:
         writer = csv.writer(f)
-        writer.writerow(["unlearned_encoder", "retrained_encoder", "l2_distance"])
+        writer.writerow(["unlearned_encoder", "retrained_encoder", "parameter_mse"])
         writer.writerows(results)
