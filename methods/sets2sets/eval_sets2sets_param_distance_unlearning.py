@@ -1,0 +1,96 @@
+import pickle
+import math
+import os
+import torch
+from torch.nn.utils import parameters_to_vector
+import csv
+
+
+
+def unlearn_model_to_retrained_model(unlearn_filename):
+    ds = "Instacart"
+    seed = int(unlearn_filename.split("_seed_")[-1].split("_")[0])
+    frac = float(unlearn_filename.split("_unlearning_fraction_")[-1].split("_")[0])
+    unlearn_epochs = int(unlearn_filename.split("_epoch_")[-1].split("_")[0])
+
+    with open(f"../../unlearning_data/dataset_{ds.lower()}_seed_{seed}"
+          f"_method_sensitive_unlearning_fraction_{frac}.pkl") as f:
+        unlearn_users_to_items = pickle.load(f)
+
+    n = len(unlearn_users_to_items)
+    checkpoint_every = math.ceil(n / 4)
+    checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 5 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 5 and i == n - 1))]
+    if len(checkpoint_idxs) == 5:
+        checkpoint_idxs = checkpoint_idxs[:4] + [checkpoint_idxs[-1]]
+    
+    retrain_idx_to_match = checkpoint_idxs.index(unlearn_epochs)
+    if retrain_idx_to_match == -1:
+        return None, None
+    
+    encoder_retrain_filename = f"encoder_instacart0_model_best_seed_{seed}_sensitive_category_{ds.lower()}_retrain_checkpoint_idx_to_match_{retrain_idx_to_match}.pt"
+    decoder_retrain_filename = f"decoder_instacart0_model_best_seed_{seed}_sensitive_category_{ds.lower()}_retrain_checkpoint_idx_to_match_{retrain_idx_to_match}.pt"
+    return encoder_retrain_filename, decoder_retrain_filename
+
+
+
+def coupled_distance(enc_a, dec_a, enc_b, dec_b, device="cpu"):
+    """
+    p-norm of the *combined* parameter vector of (encoder, decoder).
+
+    enc_a / dec_a : un-/pre-trained pair
+    enc_b / dec_b : retrained pair
+    """
+    with torch.no_grad():
+        vec_a = torch.cat([
+            parameters_to_vector([p.detach().to(device) for p in enc_a.parameters()]),
+            parameters_to_vector([p.detach().to(device) for p in dec_a.parameters()])
+        ])
+
+        vec_b = torch.cat([
+            parameters_to_vector([p.detach().to(device) for p in enc_b.parameters()]),
+            parameters_to_vector([p.detach().to(device) for p in dec_b.parameters()])
+        ])
+
+    param_diff = vec_a - vec_b
+    # MSE
+    return (param_diff ** 2).mean().item()
+
+
+if __name__ == "__main__":
+    use_cuda = False
+    seeds = [2, 3, 5, 7, 11]
+    categories = ["baby", "alcohol", "meat"]
+    datasets = ["Instacart"]
+    unlearning_fractions = [0.001]
+    unlearning_algorithms = ["scif", "fanchuan", "kookmin"]
+
+    results = []
+
+    directory = "./models"
+    for filename in os.listdir(directory):
+        if "decoder" in filename:
+            continue
+
+        encoder_path = filename
+        decoder_path = filename.replace("encoder", "decoder")
+        retrain_encoder_filename, retrain_decoder_filename = unlearn_model_to_retrained_model(filename)
+        if retrain_encoder_filename is None or retrain_decoder_filename is None:
+            print(f"Skipping {filename}, fitting retrained models not found.")
+            continue
+
+        unlearned_encoder = torch.load(encoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
+        unlearned_decoder = torch.load(decoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
+
+        retrained_encoder = torch.load(retrain_encoder_filename, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
+        retrained_decoder = torch.load(retrain_decoder_filename, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
+
+        param_distance = coupled_distance(unlearned_encoder, unlearned_decoder, retrained_encoder, retrained_decoder)
+
+        results.append([encoder_path, retrain_encoder_filename, param_distance])
+
+
+    out_file = f"{directory}/sets2sets_param_distances.csv"
+    with open(out_file, "w") as f:
+        writer = csv.writer(f)
+        writer.writerow(["unlearned_encoder", "retrained_encoder", "l2_distance"])
+        writer.writerows(results)
