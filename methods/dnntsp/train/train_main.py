@@ -160,7 +160,7 @@ def evaluate_best_model(model,
     history_path = history_path or args.history_path
     future_path = future_path or args.future_path
     batch_size = batch_size or args.batch_size
-    keyset_path = keyset_path or args.keyset_path
+    #keyset_path = keyset_path or args.keyset_path
 
     # 1) build test DataLoader
     if temporal_split:
