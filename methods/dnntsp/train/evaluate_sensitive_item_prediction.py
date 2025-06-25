@@ -155,7 +155,35 @@ def main():
                         "run_dir": run_dir.name,
                         "ckpt_file": os.path.basename(ckpt),
                         "users_with_sensitive_predictions": n_flagged,
-                        "total_users": n_users
+                        "total_users": n_users,
+                        "sensitive_items_removed": True,
+                    })
+
+                    loader = get_data_loader_temporal_split(
+                        history_path=args.history_path,
+                        future_path=args.future_path,
+                        data_type="test",
+                        batch_size=args.batch_size,
+                        item_embedding_matrix=model.item_embedding,
+                        retrain_flag=False,
+                        users_in_unlearning_set=list(user2items.keys()),
+                        user_to_unlearning_items=user2items,
+                        user_subset=list(user2items.keys()))
+
+                    tqdm_loader = tqdm.tqdm(loader, leave=False, disable=True)
+
+                    n_flagged, n_users = count_sensitive_users(model, tqdm_loader, sens_set, args.top_k)
+
+                    print(f"[{run_dir.name} | {os.path.basename(ckpt)} | cat={meta['category']}]\n"
+                          f"{n_flagged}/{n_users} users flagged (top-{args.top_k})")
+
+                    rows.append({
+                        **meta,
+                        "run_dir": run_dir.name,
+                        "ckpt_file": os.path.basename(ckpt),
+                        "users_with_sensitive_predictions": n_flagged,
+                        "total_users": n_users,
+                        "sensitive_items_removed": False,
                     })
 
                 except Exception as e:
