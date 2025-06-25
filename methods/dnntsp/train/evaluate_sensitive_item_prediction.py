@@ -147,7 +147,7 @@ def main():
 
                     n_flagged, n_users = count_sensitive_users(model, tqdm_loader, sens_set, args.top_k)
 
-                    print(f"[{run_dir.name} | {os.path.basename(ckpt)} | cat={meta['category']}]\n"
+                    print(f"[{run_dir.name} | {os.path.basename(ckpt)} | filtered data | cat={meta['category']}]\n"
                           f"{n_flagged}/{n_users} users flagged (top-{args.top_k})")
 
                     rows.append({
@@ -174,7 +174,7 @@ def main():
 
                     n_flagged, n_users = count_sensitive_users(model, tqdm_loader, sens_set, args.top_k)
 
-                    print(f"[{run_dir.name} | {os.path.basename(ckpt)} | cat={meta['category']}]\n"
+                    print(f"[{run_dir.name} | {os.path.basename(ckpt)} | original data | cat={meta['category']}]\n"
                           f"{n_flagged}/{n_users} users flagged (top-{args.top_k})")
 
                     rows.append({
