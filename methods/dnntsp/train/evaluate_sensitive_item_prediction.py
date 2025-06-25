@@ -189,16 +189,16 @@ def main():
                         "sensitive_items_removed": False,
                     })
 
-                    if any([x in run_dir for x in original_models]):
-                        seed = int(run_dir.split("seed_")[-1].split(".pkl")[0])
+                    if any([x in ckpt for x in original_models]):
+                        seed = int(ckpt.split("seed_")[-1].split(".pkl")[0])
                         scores = evaluate_best_model(
                             model=model,
                             args=args,
                             users_in_unlearning_set=list(user2items.keys()),
                             user_to_unlearning_items=user2items,
                             retrain_str="",
-                            model_folder="".join(run_dir.split("/")[:-1]),
-                            model_path=run_dir.split("/")[-1],
+                            model_folder="".join(ckpt.split("/")[:-1]),
+                            model_path=ckpt.split("/")[-1],
                             temporal_split=True,
                             retrain_flag=True,
                             seed=seed,
