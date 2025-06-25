@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-Walk through every un-learning run below --root and count **how many users**
-still receive at least one sensitive item in their top-k predictions.
-"""
 
 import argparse, os, re, pickle, glob, sys
 from pathlib import Path
@@ -23,21 +19,42 @@ CKPT_RGX = (r"unlearn_model_best_epoch_(\d+)_seed_(\d+)"
             r"_unlearning_fraction_([\d\.]+)"
             r"_unlearning_algorithm_([\w\-]+)\.pkl")
 
+VALID_BASELINE_SEEDS = {2, 3, 5, 7, 11}
+
 def list_run_dirs(root: Path):
     for p in [root] + [d for d in root.iterdir() if d.is_dir()]:
-        if any(re.match(CKPT_RGX, f.name) for f in p.glob("*.pkl")):
+        if any(
+            re.match(CKPT_RGX, f.name) or re.match(r"model_best_seed_(\d+)\.pkl", f.name)
+            for f in p.glob("*.pkl")
+        ):
             yield p
 
 def discover_ckpts(run_dir: Path):
-    pat = run_dir / ("unlearn_model_best_epoch_*_seed_*_sensitive_category_*"
-                     "_unlearning_fraction_*_unlearning_algorithm_*.pkl")
-    return sorted(glob.glob(str(pat)))
+    ckpt_paths = sorted(glob.glob(str(run_dir / "*.pkl")))
+    return [
+        p for p in ckpt_paths
+        if re.search(CKPT_RGX, os.path.basename(p)) or
+           re.match(r"model_best_seed_(\d+)\.pkl", os.path.basename(p))
+    ]
 
 def parse_ckpt(fname):
-    m = re.search(CKPT_RGX, os.path.basename(fname))
-    return dict(epoch=int(m.group(1)), seed=int(m.group(2)),
-                category=m.group(3), unlearning_fraction=float(m.group(4)),
-                algorithm=m.group(5))
+    base = os.path.basename(fname)
+    m = re.search(CKPT_RGX, base)
+    if m:
+        return [dict(epoch=int(m.group(1)), seed=int(m.group(2)),
+                     category=m.group(3), unlearning_fraction=float(m.group(4)),
+                     algorithm=m.group(5))]
+    
+    m2 = re.match(r"model_best_seed_(\d+)\.pkl", base)
+    if m2:
+        seed = int(m2.group(1))
+        if seed in VALID_BASELINE_SEEDS:
+            return [
+                dict(epoch=-1, seed=seed, category=cat,
+                     unlearning_fraction=0.001, algorithm="baseline")
+                for cat in ["baby", "meat", "alcohol"]
+            ]
+    return []
 
 # ----------------------------------------------------------------------
 # model helpers
@@ -105,40 +122,52 @@ def main():
 
     for run_dir in list_run_dirs(root):
         for ckpt in discover_ckpts(run_dir):
-            meta = parse_ckpt(ckpt)
+            metas = parse_ckpt(ckpt)
+            for meta in metas:
+                try:
+                    model = build_model(args.item_embed_dim)
+                    model = load_model(model, ckpt)
 
-            model = build_model(args.item_embed_dim)
-            model = load_model(model, ckpt)
+                    sens_set, user2items = load_sensitive_items(
+                        ds_name, meta["seed"], meta["unlearning_fraction"], meta["category"])
 
-            sens_set, user2items = load_sensitive_items(
-                ds_name, meta["seed"], meta["unlearning_fraction"], meta["category"])
+                    loader = get_data_loader_temporal_split(
+                        history_path=args.history_path,
+                        future_path=args.future_path,
+                        data_type="test",
+                        batch_size=args.batch_size,
+                        item_embedding_matrix=model.item_embedding,
+                        retrain_flag=True,
+                        users_in_unlearning_set=list(user2items.keys()),
+                        user_to_unlearning_items=user2items,
+                        user_subset=list(user2items.keys()))
 
-            loader = get_data_loader_temporal_split(
-                history_path=args.history_path,
-                future_path=args.future_path,
-                data_type="test",
-                batch_size=args.batch_size,
-                item_embedding_matrix=model.item_embedding,
-                retrain_flag=True,
-                users_in_unlearning_set=list(user2items.keys()),
-                user_to_unlearning_items=user2items,
-                user_subset=list(user2items.keys()))
+                    tqdm_loader = tqdm.tqdm(loader, leave=False, disable=True)
 
-            tqdm_loader = tqdm.tqdm(loader, leave=False, disable=True)
+                    n_flagged, n_users = count_sensitive_users(model, tqdm_loader, sens_set, args.top_k)
 
-            n_flagged, n_users = count_sensitive_users(model, tqdm_loader, sens_set, args.top_k)
+                    print(f"[{run_dir.name} | {os.path.basename(ckpt)} | cat={meta['category']}]\n"
+                          f"{n_flagged}/{n_users} users flagged (top-{args.top_k})")
 
-            print(f"[{run_dir.name} | {os.path.basename(ckpt)}]\n{n_flagged}/{n_users} users flagged (top-{args.top_k})")
+                    rows.append({
+                        **meta,
+                        "run_dir": run_dir.name,
+                        "ckpt_file": os.path.basename(ckpt),
+                        "users_with_sensitive_predictions": n_flagged,
+                        "total_users": n_users
+                    })
 
-            rows.append({**meta, "run_dir": run_dir.name, "users_with_sensitive_predictions": n_flagged, "total_users": n_users})
+                except Exception as e:
+                    print(f"⚠️ Skipped {ckpt} ({meta['category']}) due to error: {e}")
 
-            del model, loader
-            torch.cuda.empty_cache()
-            sys.stdout.flush()
+                finally:
+                    del model, loader
+                    torch.cuda.empty_cache()
+                    sys.stdout.flush()
 
     out_csv = root / "sensitive_predictions_summary.csv"
     pd.DataFrame(rows).to_csv(out_csv, index=False)
-    print(f"\nSummary saved to {out_csv}")
+    print(f"\n✅ Summary saved to {out_csv}")
 
 if __name__ == "__main__":
     main()
