@@ -134,7 +134,7 @@ def main():
 
                     sens_set, user2items = load_sensitive_items(
                         ds_name, meta["seed"], meta["unlearning_fraction"], meta["category"])
-                    
+
 
                     if any([x in ckpt for x in original_models]):
                         seed = int(ckpt.split("seed_")[-1].split(".pkl")[0])
@@ -144,8 +144,7 @@ def main():
                             users_in_unlearning_set=list(user2items.keys()),
                             user_to_unlearning_items=user2items,
                             retrain_str="",
-                            model_folder="/".join(ckpt.split("/")[:-1]),
-                            model_path=ckpt.split("/")[-1],
+                            model_path=ckpt,
                             temporal_split=True,
                             retrain_flag=True,
                             seed=seed,
