@@ -134,6 +134,27 @@ def main():
 
                     sens_set, user2items = load_sensitive_items(
                         ds_name, meta["seed"], meta["unlearning_fraction"], meta["category"])
+                    
+                    print(ckpt)
+                    exit(0)
+
+                    if any([x in ckpt for x in original_models]):
+                        seed = int(ckpt.split("seed_")[-1].split(".pkl")[0])
+                        scores = evaluate_best_model(
+                            model=model,
+                            args=args,
+                            users_in_unlearning_set=list(user2items.keys()),
+                            user_to_unlearning_items=user2items,
+                            retrain_str="",
+                            model_folder="".join(ckpt.split("/")[:-1]),
+                            model_path=ckpt.split("/")[-1],
+                            temporal_split=True,
+                            retrain_flag=True,
+                            seed=seed,
+                            history_path=args.history_path,
+                            future_path=args.future_path,
+                            batch_size=args.batch_size,
+                        )
 
                     loader = get_data_loader_temporal_split(
                         history_path=args.history_path,
@@ -188,24 +209,6 @@ def main():
                         "total_users": n_users,
                         "sensitive_items_removed": False,
                     })
-
-                    if any([x in ckpt for x in original_models]):
-                        seed = int(ckpt.split("seed_")[-1].split(".pkl")[0])
-                        scores = evaluate_best_model(
-                            model=model,
-                            args=args,
-                            users_in_unlearning_set=list(user2items.keys()),
-                            user_to_unlearning_items=user2items,
-                            retrain_str="",
-                            model_folder="".join(ckpt.split("/")[:-1]),
-                            model_path=ckpt.split("/")[-1],
-                            temporal_split=True,
-                            retrain_flag=True,
-                            seed=seed,
-                            history_path=args.history_path,
-                            future_path=args.future_path,
-                            batch_size=args.batch_size,
-                        )
 
 
                 except Exception as e:
