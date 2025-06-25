@@ -67,7 +67,8 @@ def build_model(embed_dim: int):
 def load_sensitive_items(ds, seed, frac, cat):
     fn = (f"../../../unlearning_data/dataset_{ds.lower()}_seed_{seed}"
           f"_method_sensitive_unlearning_fraction_{frac}.pkl")
-    mapping = pickle.load(open(fn, "rb"))[cat]
+    with open(fn, "rb") as f:
+        mapping = pickle.load(f)[cat]
     return set(i for v in mapping.values() for i in v), mapping
 
 # ----------------------------------------------------------------------
