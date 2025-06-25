@@ -135,9 +135,6 @@ def main():
                     sens_set, user2items = load_sensitive_items(
                         ds_name, meta["seed"], meta["unlearning_fraction"], meta["category"])
                     
-                    print("/".join(ckpt.split("/")[:-1]))
-                    print(ckpt.split("/")[-1])
-                    exit(0)
 
                     if any([x in ckpt for x in original_models]):
                         seed = int(ckpt.split("seed_")[-1].split(".pkl")[0])
