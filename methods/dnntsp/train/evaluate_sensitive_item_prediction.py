@@ -4,6 +4,8 @@ import argparse, os, re, pickle, glob, sys
 from pathlib import Path
 import pandas as pd, torch, tqdm
 
+from train_main import evaluate_best_model
+
 sys.path.append("..")
 
 from utils.load_config import get_attribute
@@ -120,6 +122,7 @@ def main():
     root = Path(args.root).resolve()
     ds_name = get_attribute("data")
     rows = []
+    original_models = [f"model_best_seed_{s}.pkl" for s in [2, 3, 5, 7, 11]]
 
     for run_dir in list_run_dirs(root):
         for ckpt in discover_ckpts(run_dir):
@@ -185,6 +188,25 @@ def main():
                         "total_users": n_users,
                         "sensitive_items_removed": False,
                     })
+
+                    if any([x in run_dir for x in original_models]):
+                        seed = int(run_dir.split("seed_")[-1].split(".pkl")[0])
+                        scores = evaluate_best_model(
+                            model=model,
+                            args=args,
+                            users_in_unlearning_set=list(user2items.keys()),
+                            user_to_unlearning_items=user2items,
+                            retrain_str="",
+                            model_folder="".join(run_dir.split("/")[:-1]),
+                            model_path=run_dir.split("/")[-1],
+                            temporal_split=True,
+                            retrain_flag=True,
+                            seed=seed,
+                            history_path=args.history_path,
+                            future_path=args.future_path,
+                            batch_size=args.batch_size,
+                        )
+
 
                 except Exception as e:
                     print(f"⚠️ Skipped {ckpt} ({meta['category']}) due to error: {e}")

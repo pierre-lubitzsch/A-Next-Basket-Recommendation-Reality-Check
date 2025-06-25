@@ -124,7 +124,12 @@ def evaluate_best_model(model,
                         model_folder=None,
                         temporal_split=False,
                         model_path=None,
-                        retrain_flag=False,):
+                        retrain_flag=False,
+                        seed=None,
+                        history_path=None,
+                        future_path=None,
+                        keyset_path=None,
+                        batch_size=None,):
     """
     Load the best checkpoint saved during training and evaluate it on the TEST split,
     reporting Recall@10, Recall@20, NDCG@10, NDCG@20, HitRate@10 and HitRate@20.
@@ -151,13 +156,19 @@ def evaluate_best_model(model,
         A mapping from metric name (e.g. 'recall_10') to its value.
     """
 
+    seed = seed or args.seed
+    history_path = history_path or args.history_path
+    future_path = future_path or args.future_path
+    batch_size = batch_size or args.batch_size
+    keyset_path = keyset_path or args.keyset_path
+
     # 1) build test DataLoader
     if temporal_split:
         test_loader = get_data_loader_temporal_split(
-            history_path=args.history_path,
-            future_path=args.future_path,
+            history_path=history_path,
+            future_path=future_path,
             data_type='test',
-            batch_size=args.batch_size,
+            batch_size=batch_size,
             item_embedding_matrix=model.item_embedding,
             retrain_flag=retrain_flag,
             users_in_unlearning_set=users_in_unlearning_set,
@@ -165,18 +176,18 @@ def evaluate_best_model(model,
         )
     else:
         test_loader = get_data_loader(
-            history_path=args.history_path,
-            future_path=args.future_path,
-            keyset_path=args.keyset_path,
+            history_path=history_path,
+            future_path=future_path,
+            keyset_path=keyset_path,
             data_type='test',
-            batch_size=args.batch_size,
+            batch_size=batch_size,
             item_embedding_matrix=model.item_embedding
         )
 
     # 2) load best checkpoint
     best_path = os.path.join(
         model_folder,
-        f"model_best_seed_{args.seed}{retrain_str}.pkl"
+        f"model_best_seed_{seed}{retrain_str}.pkl"
     ) if model_path is None else model_path
     print(f"[evaluate] Loading model from: {best_path}")
     # re‐construct model architecture
