@@ -150,7 +150,7 @@ def main():
                         ds_name, meta["seed"], meta["unlearning_fraction"], meta["category"])
 
 
-                    if any([x in ckpt for x in original_models]):
+                    if any([x in ckpt or not x.startswith("unlearn") for x in original_models]):
                         seed = int(ckpt.split("seed_")[-1].split(".pkl")[0])
                         scores = evaluate_best_model(
                             model=model,
