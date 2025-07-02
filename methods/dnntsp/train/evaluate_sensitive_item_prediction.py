@@ -21,6 +21,11 @@ CKPT_RGX = (r"unlearn_model_best_epoch_(\d+)_seed_(\d+)"
             r"_unlearning_fraction_([\d\.]+)"
             r"_unlearning_algorithm_([\w\-]+)\.pkl")
 
+RETRAIN_RGX = (r"model_best_seed_(\d+)"
+            r"_sensitive_category_([\w\-]+)"
+            r"_unlearning_fraction_([\d\.]+)"
+            r"_retrain_checkpoint_idx_to_match_(\d+)\.pkl")
+
 VALID_BASELINE_SEEDS = {2, 3, 5, 7, 11}
 
 def list_run_dirs(root: Path):
@@ -34,9 +39,10 @@ def list_run_dirs(root: Path):
 def discover_ckpts(run_dir: Path):
     ckpt_paths = sorted(glob.glob(str(run_dir / "*.pkl")))
     return [
-        p for p in ckpt_paths
-        if re.search(CKPT_RGX, os.path.basename(p)) or
-           re.match(r"model_best_seed_(\d+)\.pkl", os.path.basename(p))
+        p for p in ckpt_paths if re.search(RETRAIN_RGX, os.path.basename(p))
+        # if re.search(CKPT_RGX, os.path.basename(p))
+        #     or re.search(RETRAIN_RGX, os.path.basename(p))
+        #     or re.match(r"model_best_seed_(\d+)\.pkl", os.path.basename(p))
     ]
 
 def parse_ckpt(fname):
@@ -56,6 +62,14 @@ def parse_ckpt(fname):
                      unlearning_fraction=0.001, algorithm="baseline")
                 for cat in ["baby", "meat", "alcohol"]
             ]
+        
+
+    m3 = re.search(RETRAIN_RGX, base)
+    if m3:
+        return [dict(epoch=-1, seed=int(m3.group(1)),
+                     category=m3.group(2), unlearning_fraction=float(m3.group(3)),
+                     algorithm="retrain")]
+
     return []
 
 # ----------------------------------------------------------------------
@@ -209,16 +223,17 @@ def main():
 
 
                 except Exception as e:
-                    print(f"⚠️ Skipped {ckpt} ({meta['category']}) due to error: {e}")
+                    print(f"Skipped {ckpt} ({meta['category']}) due to error: {e}")
 
                 finally:
                     del model, loader
                     torch.cuda.empty_cache()
                     sys.stdout.flush()
 
-    out_csv = root / "sensitive_predictions_summary.csv"
+    # out_csv = root / "sensitive_predictions_summary.csv"
+    out_csv = root / "sensitive_predictions_retrain.csv"
     pd.DataFrame(rows).to_csv(out_csv, index=False)
-    print(f"\n✅ Summary saved to {out_csv}")
+    print(f"\nSummary saved to {out_csv}")
 
 if __name__ == "__main__":
     main()
