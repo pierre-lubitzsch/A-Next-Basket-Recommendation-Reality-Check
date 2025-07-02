@@ -151,7 +151,7 @@ def main():
 
 
                     if any([x in ckpt or not x.startswith("unlearn") for x in original_models]):
-                        seed = int(ckpt.split("seed_")[-1].split(".pkl")[0])
+                        seed = int(ckpt.split("seed_")[-1].split(".pkl")[0]) if "sensitive_category" not in ckpt else int(ckpt.split("seed_")[-1].split("_sensitive_")[0])
                         scores = evaluate_best_model(
                             model=model,
                             args=args,
