@@ -168,7 +168,12 @@ def main():
 
                     # filter out users which were not unlearned yet
                     filename = ckpt.split("/")[-1]
-                    unlearn_first_x = len(sens_set) if meta["epoch"] == -1 else int(filename.split("_epoch_")[-1].split("_seed_")[0])
+                    if not filename.startswith("unlearn"):
+                        unlearn_first_x = len(user2items) if meta["epoch"] == -1 else int(filename.split("_epoch_")[-1].split("_seed_")[0])
+                    elif "retrain_checkpoint_idx_to_match" in filename:
+                        unlearn_first_x = int(filename.split("retrain_checkpoint_idx_to_match_")[-1].split(".pkl")[0])
+                    else:
+                        unlearn_first_x = len(user2items)
                     users = set(sorted(user2items.keys())[:unlearn_first_x])
                     user2items = {k: v for k, v in user2items.items() if k in users}
 
