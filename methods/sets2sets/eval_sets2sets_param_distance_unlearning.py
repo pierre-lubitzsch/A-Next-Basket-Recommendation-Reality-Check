@@ -7,10 +7,7 @@ import csv
 import sys
 import json
 
-from sets2sets_new import next_k_step, decoding_next_k_step
-
-
-from sets2sets_new import EncoderRNN_new, AttnDecoderRNN_new
+from sets2sets_new import EncoderRNN_new, AttnDecoderRNN_new, decoding_next_k_step
 
 
 def unlearn_model_to_retrained_model(unlearn_filename):
