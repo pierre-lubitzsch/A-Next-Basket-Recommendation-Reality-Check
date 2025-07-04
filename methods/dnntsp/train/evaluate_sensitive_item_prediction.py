@@ -66,8 +66,24 @@ def parse_ckpt(fname):
 
     m3 = re.search(RETRAIN_RGX, base)
     if m3:
-        return [dict(epoch=-1, seed=int(m3.group(1)),
-                     category=m3.group(2), unlearning_fraction=float(m3.group(3)),
+        seed = int(m3.group(1))
+        category = m3.group(2)
+        unlearning_fraction = float(m3.group(3))
+
+        unlearning_data_file = (f"../../../unlearning_data/dataset_"
+                                f"instacart_seed_{seed}"
+                                f"_method_sensitive_unlearning_fraction_{unlearning_fraction}.pkl")
+        with open(unlearning_data_file, "rb") as f:
+            user_to_unlearning_items = pickle.load(f)
+            user_to_unlearning_items = user_to_unlearning_items[category]
+
+        n = len(user_to_unlearning_items)
+        checkpoint_every = (n + 3) // 4 # ceil
+        checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 5 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 5 and i == n - 1))]
+        idx = int(m3.group(4))
+        epoch = checkpoint_idxs[idx]
+        return [dict(epoch=epoch, seed=seed,
+                     category=category, unlearning_fraction=unlearning_fraction,
                      algorithm="retrain")]
 
     return []
@@ -151,7 +167,7 @@ def main():
                         ds_name, meta["seed"], meta["unlearning_fraction"], meta["category"])
 
                     # filter out users which were not unlearned yet
-                    unlearn_first_x = len(sens_set) if "_epoch_" not in ckpt or "unlearn_model" not in ckpt else int(ckpt.split("_epoch_")[-1].split("_seed_")[0])
+                    unlearn_first_x = len(sens_set) if meta["epoch"] == -1 else int(ckpt.split("_epoch_")[-1].split("_seed_")[0])
                     users = set(sorted(user2items.keys())[:unlearn_first_x])
                     user2items = {k: v for k, v in user2items.items() if k in users}
 
