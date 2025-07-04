@@ -151,9 +151,9 @@ def main():
                         ds_name, meta["seed"], meta["unlearning_fraction"], meta["category"])
 
                     # filter out users which were not unlearned yet
-                    unlearn_first_x = len(user2items) if "_epoch_" not in ckpt or "unlearn_model" not in ckpt else int(ckpt.split("_epoch_")[-1].split("_seed_")[0])
-                    sens_set = sorted(user2items.keys())[:unlearn_first_x]
-                    user2items = {k: v for k, v in user2items.items() if k in sens_set}
+                    unlearn_first_x = len(sens_set) if "_epoch_" not in ckpt or "unlearn_model" not in ckpt else int(ckpt.split("_epoch_")[-1].split("_seed_")[0])
+                    users = set(sorted(user2items.keys())[:unlearn_first_x])
+                    user2items = {k: v for k, v in user2items.items() if k in users}
 
                     if args.performance_evaluation and any([x in ckpt or not x.startswith("unlearn") for x in original_models]):
                         seed = int(ckpt.split("seed_")[-1].split(".pkl")[0]) if "sensitive_category" not in ckpt else int(ckpt.split("seed_")[-1].split("_sensitive_")[0])
