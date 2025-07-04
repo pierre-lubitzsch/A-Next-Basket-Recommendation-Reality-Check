@@ -7,7 +7,7 @@ import csv
 import sys
 import json
 
-from sets2sets_new import input_size, next_k_step, decoding_next_k_step
+from sets2sets_new import next_k_step, decoding_next_k_step
 
 
 from sets2sets_new import EncoderRNN_new, AttnDecoderRNN_new
@@ -82,6 +82,7 @@ if __name__ == "__main__":
     unlearning_fractions = [0.001]
     unlearning_algorithms = ["scif", "fanchuan", "kookmin"]
     topk_list = [10, 20]
+    next_k_step = 1
 
     results = []
     filenames_seen = set()
@@ -143,6 +144,7 @@ if __name__ == "__main__":
             future_data = json.load(f)
         with open(keyset_file, 'r') as f:
             keyset = json.load(f)
+            input_size = keyset['item_num']
         with open(unlearning_data_file, "rb") as f:
             user_to_unlearning_items = pickle.load(f)
             sensitive_category = filename.split("sensitive_category_")[-1].split("_")[0]
