@@ -167,12 +167,13 @@ def main():
                         ds_name, meta["seed"], meta["unlearning_fraction"], meta["category"])
 
                     # filter out users which were not unlearned yet
-                    unlearn_first_x = len(sens_set) if meta["epoch"] == -1 else int(ckpt.split("_epoch_")[-1].split("_seed_")[0])
+                    filename = ckpt.split("/")[-1]
+                    unlearn_first_x = len(sens_set) if meta["epoch"] == -1 else int(filename.split("_epoch_")[-1].split("_seed_")[0])
                     users = set(sorted(user2items.keys())[:unlearn_first_x])
                     user2items = {k: v for k, v in user2items.items() if k in users}
 
-                    if args.performance_evaluation and any([x in ckpt or not x.startswith("unlearn") for x in original_models]):
-                        seed = int(ckpt.split("seed_")[-1].split(".pkl")[0]) if "sensitive_category" not in ckpt else int(ckpt.split("seed_")[-1].split("_sensitive_")[0])
+                    if args.performance_evaluation and any([x in filename or not x.startswith("unlearn") for x in original_models]):
+                        seed = int(filename.split("seed_")[-1].split(".pkl")[0]) if "sensitive_category" not in filename else int(filename.split("seed_")[-1].split("_sensitive_")[0])
                         scores = evaluate_best_model(
                             model=model,
                             args=args,
