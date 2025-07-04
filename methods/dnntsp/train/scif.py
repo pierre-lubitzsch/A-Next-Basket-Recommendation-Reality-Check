@@ -115,7 +115,7 @@ def target_params(encoder, decoder):
 
     keep = {
         "embedding.weight",
-        "out.weight", "out.bias",
+        #"out.weight", "out.bias",
         "attn_combine5.weight", "attn_combine5.bias",
     }
     for n, p in decoder.named_parameters():

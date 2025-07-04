@@ -83,7 +83,7 @@ if __name__ == "__main__":
 
     directory = "./models"
     for filename in sorted(os.listdir(directory)):
-        if "decoder" in filename or "unlearn" not in filename or "unlearning_fraction_0.001" not in filename:
+        if "decoder" in filename or "unlearn" not in filename or "unlearning_fraction_0.001" not in filename or "unlearn_epoch" not in filename:
             continue
 
         encoder_filename = filename

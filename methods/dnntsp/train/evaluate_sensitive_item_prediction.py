@@ -151,7 +151,7 @@ def main():
                         ds_name, meta["seed"], meta["unlearning_fraction"], meta["category"])
 
                     # filter out users which were not unlearned yet
-                    unlearn_first_x = len(user2items) if "_epoch_" not in ckpt else int(ckpt.split("_epoch_")[-1].split("_seed_")[0])
+                    unlearn_first_x = len(user2items) if "_epoch_" not in ckpt or "unlearn_model" not in ckpt else int(ckpt.split("_epoch_")[-1].split("_seed_")[0])
                     sens_set = sorted(user2items.keys())[:unlearn_first_x]
                     user2items = {k: v for k, v in user2items.items() if k in sens_set}
 
