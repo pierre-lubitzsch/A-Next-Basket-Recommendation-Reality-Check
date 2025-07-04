@@ -39,10 +39,10 @@ def list_run_dirs(root: Path):
 def discover_ckpts(run_dir: Path):
     ckpt_paths = sorted(glob.glob(str(run_dir / "*.pkl")))
     return [
-        p for p in ckpt_paths if re.search(RETRAIN_RGX, os.path.basename(p))
-        # if re.search(CKPT_RGX, os.path.basename(p))
-        #     or re.search(RETRAIN_RGX, os.path.basename(p))
-        #     or re.match(r"model_best_seed_(\d+)\.pkl", os.path.basename(p))
+        p for p in ckpt_paths
+        if re.search(CKPT_RGX, os.path.basename(p))
+            or re.search(RETRAIN_RGX, os.path.basename(p))
+            or re.match(r"model_best_seed_(\d+)\.pkl", os.path.basename(p))
     ]
 
 def parse_ckpt(fname):
@@ -131,6 +131,7 @@ def main():
     ap.add_argument("--batch_size", type=int, default=64)
     ap.add_argument("--item_embed_dim", type=int, default=32)
     ap.add_argument("--top_k", type=int, default=20)
+    ap.add_argument("--performance_evaluation", action="store_true")
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
@@ -149,8 +150,12 @@ def main():
                     sens_set, user2items = load_sensitive_items(
                         ds_name, meta["seed"], meta["unlearning_fraction"], meta["category"])
 
+                    # filter out users which were not unlearned yet
+                    unlearn_first_x = len(user2items) if "_epoch_" not in ckpt else int(ckpt.split("_epoch_")[-1].split("_seed_")[0])
+                    sens_set = sorted(user2items.keys())[:unlearn_first_x]
+                    user2items = {k: v for k, v in user2items.items() if k in sens_set}
 
-                    if any([x in ckpt or not x.startswith("unlearn") for x in original_models]):
+                    if args.performance_evaluation and any([x in ckpt or not x.startswith("unlearn") for x in original_models]):
                         seed = int(ckpt.split("seed_")[-1].split(".pkl")[0]) if "sensitive_category" not in ckpt else int(ckpt.split("seed_")[-1].split("_sensitive_")[0])
                         scores = evaluate_best_model(
                             model=model,
@@ -230,8 +235,7 @@ def main():
                     torch.cuda.empty_cache()
                     sys.stdout.flush()
 
-    # out_csv = root / "sensitive_predictions_summary.csv"
-    out_csv = root / "sensitive_predictions_retrain.csv"
+    out_csv = root / "sensitive_predictions_summary_v2.csv"
     pd.DataFrame(rows).to_csv(out_csv, index=False)
     print(f"\nSummary saved to {out_csv}")
 
