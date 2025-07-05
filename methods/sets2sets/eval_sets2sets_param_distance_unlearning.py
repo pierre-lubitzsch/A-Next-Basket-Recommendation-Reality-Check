@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
     directory = "./models"
     for filename in sorted(os.listdir(directory)):
-        if "decoder" in filename or ("retrain_checkpoint_idx_to_match" not in filename and "unlearn_epoch" not in filename):
+        if "decoder" in filename or ("unlearn_epoch" not in filename):
             continue
         
         encoder_filename = filename
@@ -174,7 +174,7 @@ if __name__ == "__main__":
                 n = len(cur_user_to_unlearning_items)
                 checkpoint_every = (n + 3) // 4 # ceil
                 checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 5 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 5 and i == n - 1))]
-                idx = checkpoint_idxs.index(int(cur_encoder_filename.split("retrain_checkpoint_idx_to_match_")[-1].split(".")[0]))
+                idx = int(cur_encoder_filename.split("retrain_checkpoint_idx_to_match_")[-1].split(".")[0])
                 users_to_take = checkpoint_idxs[idx] + 1
                 users = set(sorted(cur_user_to_unlearning_items.keys())[:users_to_take])
                 cur_user_to_unlearning_items = {user: cur_user_to_unlearning_items[user] for user in users if user in cur_user_to_unlearning_items}
@@ -206,6 +206,7 @@ if __name__ == "__main__":
                         sensitive_items_predicted = set(predicted_basket) & set(user_to_unlearning_items[user])
                         sensitive_item_in_output_basket_count += int(len(sensitive_items_predicted) > 0)
                     
+                    print(f"{sensitive_item_in_output_basket_count}/{len(cur_user_to_unlearning_items)} users have sensitive items in their output basket")
                     results.append([encoder_filename, retrain_encoder_filename, original_encoder_filename, param_distance_unlearned_retrained, param_distance_original_retrained, param_distance_unlearned_original, k, cur_encoder_filename, sensitive_item_in_output_basket_count])
 
         filenames_seen |= set([encoder_filename, retrain_encoder_filename, original_encoder_filename])
