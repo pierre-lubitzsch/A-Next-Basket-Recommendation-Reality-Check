@@ -203,16 +203,19 @@ if __name__ == "__main__":
                                                                             input_size, next_k_step, k)
                         
                         predicted_basket = output_vectors[0]
-                        sensitive_items_predicted = set(predicted_basket) & set(user_to_unlearning_items[user])
+                        predicted_basket_ints_set = set(int(t.item()) for t in predicted_basket)
+
+                        sensitive_items_predicted = predicted_basket_ints_set & set(user_to_unlearning_items[user])
                         sensitive_item_in_output_basket_count += int(len(sensitive_items_predicted) > 0)
                     
                     print(f"{sensitive_item_in_output_basket_count}/{len(cur_user_to_unlearning_items)} users have sensitive items in their output basket")
                     results.append([encoder_filename, retrain_encoder_filename, original_encoder_filename, param_distance_unlearned_retrained, param_distance_original_retrained, param_distance_unlearned_original, k, cur_encoder_filename, sensitive_item_in_output_basket_count])
 
         filenames_seen |= set([encoder_filename, retrain_encoder_filename, original_encoder_filename])
+        print("\n\n")
     
 
-    out_file = f"{directory}/sets2sets_param_distances.csv"
+    out_file = f"{directory}/sets2sets_unlearning_sensitive_evaluation.csv"
     with open(out_file, "w") as f:
         writer = csv.writer(f)
         writer.writerow(["unlearned_encoder", "retrained_encoder", "original encoder", "unlearned_vs_retrained_mse", "original_vs_retrained_mse", "unlearned_vs_original_mse", "k", "sensitive_encoder_filename", "sensitive_item_in_output_basket_count"])
