@@ -154,8 +154,12 @@ if __name__ == "__main__":
         for cur_encoder_filename, cur_decoder_filename in [(encoder_filename, decoder_filename), (retrain_encoder_filename, retrain_decoder_filename), (original_encoder_filename, original_decoder_filename)]:
             if cur_encoder_filename in filenames_seen:
                 continue
-            encoder = torch.load(cur_encoder_filename, map_location=device, weights_only=False)
-            decoder = torch.load(cur_decoder_filename, map_location=device, weights_only=False)
+
+            cur_encoder_filepath = f"{directory}/{cur_encoder_filename}"
+            cur_decoder_filepath = f"{directory}/{cur_decoder_filename}"
+
+            encoder = torch.load(cur_encoder_filepath, map_location=device, weights_only=False)
+            decoder = torch.load(cur_decoder_filepath, map_location=device, weights_only=False)
             print(f"sensitive item prediction for: {cur_encoder_filename}")
             encoder.eval()
             decoder.eval()
