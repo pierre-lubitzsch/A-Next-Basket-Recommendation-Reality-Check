@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
     directory = "./models"
     for filename in sorted(os.listdir(directory)):
-        if "decoder" in filename or "unlearn" not in filename or "unlearning_fraction_0.001" not in filename or "unlearn_epoch" not in filename:
+        if "decoder" in filename or ("retrain_checkpoint_idx_to_match" not in filename and "unlearn_epoch" not in filename):
             continue
 
         encoder_filename = filename
@@ -149,7 +149,7 @@ if __name__ == "__main__":
 
         # sensitive item prediction:
         for cur_encoder_filename, cur_decoder_filename in [(encoder_filename, decoder_filename), (retrain_encoder_filename, retrain_decoder_filename), (original_encoder_filename, original_decoder_filename)]:
-            if filename in filenames_seen:
+            if cur_encoder_filename in filenames_seen:
                 continue
             encoder = torch.load(cur_encoder_filename, map_location=device, weights_only=False)
             decoder = torch.load(cur_decoder_filename, map_location=device, weights_only=False)
