@@ -90,7 +90,8 @@ if __name__ == "__main__":
     for filename in sorted(os.listdir(directory)):
         if "decoder" in filename or ("retrain_checkpoint_idx_to_match" not in filename and "unlearn_epoch" not in filename):
             continue
-
+        print(f"Processing file: {filename}")
+        sys.stdout.flush()
         encoder_filename = filename
         decoder_filename = filename.replace("encoder", "decoder")
 
@@ -130,9 +131,9 @@ if __name__ == "__main__":
 
         del original_encoder, original_decoder, unlearned_encoder, unlearned_decoder, retrained_encoder, retrained_decoder
 
-        history_file = "../../jsondata/instacart0_history.json"
-        future_file = "../../jsondata/instacart0_future.json"
-        keyset_file = "../../jsondata/instacart0_keyset.json"
+        history_file = "../../jsondata/instacart_history.json"
+        future_file = "../../jsondata/instacart_future.json"
+        keyset_file = "../../keyset/instacart_keyset_0.json"
         unlearning_data_file = f"../../unlearning_data/dataset_instacart0_seed_{filename.split('_seed_')[-1].split('_')[0]}_method_sensitive_unlearning_fraction_0.001.pkl"
 
         with open(history_file, 'r') as f:
