@@ -90,8 +90,7 @@ if __name__ == "__main__":
     for filename in sorted(os.listdir(directory)):
         if "decoder" in filename or ("retrain_checkpoint_idx_to_match" not in filename and "unlearn_epoch" not in filename):
             continue
-        print(f"Processing file: {filename}")
-        sys.stdout.flush()
+        
         encoder_filename = filename
         decoder_filename = filename.replace("encoder", "decoder")
 
@@ -117,6 +116,9 @@ if __name__ == "__main__":
         retrained_encoder = torch.load(retrain_encoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
         retrained_decoder = torch.load(retrain_decoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
 
+        print(f"Processing file: {filename}")
+        sys.stdout.flush()
+
         param_distance_unlearned_retrained = coupled_distance(unlearned_encoder, unlearned_decoder, retrained_encoder, retrained_decoder)
         param_distance_original_retrained = coupled_distance(original_encoder, original_decoder, retrained_encoder, retrained_decoder)
         param_distance_unlearned_original = coupled_distance(unlearned_encoder, unlearned_decoder, original_encoder, original_decoder)
@@ -134,7 +136,7 @@ if __name__ == "__main__":
         history_file = "../../jsondata/instacart_history.json"
         future_file = "../../jsondata/instacart_future.json"
         keyset_file = "../../keyset/instacart_keyset_0.json"
-        unlearning_data_file = f"../../unlearning_data/dataset_instacart0_seed_{filename.split('_seed_')[-1].split('_')[0]}_method_sensitive_unlearning_fraction_0.001.pkl"
+        unlearning_data_file = f"../../unlearning_data/dataset_instacart_seed_{filename.split('_seed_')[-1].split('_')[0]}_method_sensitive_unlearning_fraction_0.001.pkl"
 
         with open(history_file, 'r') as f:
             history_data = json.load(f)
