@@ -87,6 +87,7 @@ if __name__ == "__main__":
     device = torch.device('cuda' if use_cuda else 'cpu')
 
     directory = "./models"
+
     for filename in sorted(os.listdir(directory)):
         if "decoder" in filename or ("unlearn_epoch" not in filename):
             continue
@@ -119,7 +120,7 @@ if __name__ == "__main__":
         retrained_encoder = torch.load(retrain_encoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
         retrained_decoder = torch.load(retrain_decoder_path, map_location=torch.device('cuda' if use_cuda else 'cpu'), weights_only=False)
 
-        print(f"Processing file: {filename}")
+        print(f"Processing file: {encoder_filename}")
         sys.stdout.flush()
 
         param_distance_unlearned_retrained = coupled_distance(unlearned_encoder, unlearned_decoder, retrained_encoder, retrained_decoder)
