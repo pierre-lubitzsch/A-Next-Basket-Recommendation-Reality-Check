@@ -63,7 +63,6 @@ def parse_ckpt(fname):
                 for cat in ["baby", "meat", "alcohol"]
             ]
         
-
     m3 = re.search(RETRAIN_RGX, base)
     if m3:
         seed = int(m3.group(1))
@@ -78,7 +77,7 @@ def parse_ckpt(fname):
             user_to_unlearning_items = user_to_unlearning_items[category]
 
         n = len(user_to_unlearning_items)
-        checkpoint_every = (n + 3) // 4 # ceil
+        checkpoint_every = (n + 3) // 4  # ceil
         checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 5 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 5 and i == n - 1))]
         idx = int(m3.group(4))
         epoch = checkpoint_idxs[idx]
@@ -121,7 +120,7 @@ def count_sensitive_users(model, loader, sensitive_items, k):
                 g, nf, ew, L, n, y, uf)
 
             # forward
-            logits = model(g, nf, ew, L, n, uf)
+            logits = model(g, nf, ew, L, n, y, uf)
             topk = torch.topk(logits, k, dim=1).indices.cpu()  # shape [B, k]
 
             # per-row membership test
@@ -157,8 +156,14 @@ def main():
 
     for run_dir in list_run_dirs(root):
         for ckpt in discover_ckpts(run_dir):
+            if not any([x in ckpt for x in original_models]):
+                continue
             metas = parse_ckpt(ckpt)
             for meta in metas:
+                # initialize performance metrics to None in case eval is skipped
+                scores_sensitive_removed = None
+                rec10 = ndcg10 = phr10 = None
+                rec20 = ndcg20 = phr20 = None
                 try:
                     model = build_model(args.item_embed_dim)
                     model = load_model(model, ckpt)
@@ -167,14 +172,14 @@ def main():
                         ds_name, meta["seed"], meta["unlearning_fraction"], meta["category"])
 
                     # filter out users which were not unlearned yet
-                    filename = ckpt.split("/")[-1]
+                    filename = os.path.basename(ckpt)
                     unlearn_first_x = len(user2items) if meta["epoch"] == -1 else meta["epoch"] + 1
                     users = set(sorted(user2items.keys())[:unlearn_first_x])
                     user2items = {k: v for k, v in user2items.items() if k in users}
 
-                    if args.performance_evaluation and any([x in filename or not x.startswith("unlearn") for x in original_models]):
-                        seed = meta["seed"]
-                        scores = evaluate_best_model(
+                    # ---- PERFORMANCE EVALUATION: grab Rec@10, nDCG@10, PHR@10, Rec@20, nDCG@20, PHR@20 ----
+                    if args.performance_evaluation and any([x in filename or not filename.startswith("unlearn") for x in original_models]):
+                        scores_sensitive_removed = evaluate_best_model(
                             model=model,
                             args=args,
                             users_in_unlearning_set=list(user2items.keys()),
@@ -183,12 +188,21 @@ def main():
                             model_path=ckpt,
                             temporal_split=True,
                             retrain_flag=True,
-                            seed=seed,
+                            seed=meta["seed"],
                             history_path=args.history_path,
                             future_path=args.future_path,
                             batch_size=args.batch_size,
                         )
+                        # unpack metrics (adjust keys if needed)
+                        rec10  = scores_sensitive_removed.get("recall@10") or scores_sensitive_removed.get("recall_10")
+                        ndcg10 = scores_sensitive_removed.get("ndcg@10")   or scores_sensitive_removed.get("ndcg_10")
+                        phr10  = scores_sensitive_removed.get("phr@10")    or scores_sensitive_removed.get("phr_10")
+                        rec20  = scores_sensitive_removed.get("recall@20") or scores_sensitive_removed.get("recall_20")
+                        ndcg20 = scores_sensitive_removed.get("ndcg@20")   or scores_sensitive_removed.get("ndcg_20")
+                        phr20  = scores_sensitive_removed.get("phr@20")    or scores_sensitive_removed.get("phr_20")
+                        print(f"Performance metrics: rec10={rec10}, ndcg10={ndcg10}, phr10={phr10}, rec20={rec20}, ndcg20={ndcg20}, phr20={phr20}")
 
+                    # filtered data prediction count
                     loader = get_data_loader_temporal_split(
                         history_path=args.history_path,
                         future_path=args.future_path,
@@ -199,23 +213,29 @@ def main():
                         users_in_unlearning_set=list(user2items.keys()),
                         user_to_unlearning_items=user2items,
                         user_subset=list(user2items.keys()))
-
                     tqdm_loader = tqdm.tqdm(loader, leave=False, disable=True)
 
                     n_flagged, n_users = count_sensitive_users(model, tqdm_loader, sens_set, args.top_k)
-
-                    print(f"[{run_dir.name} | {os.path.basename(ckpt)} | filtered data | cat={meta['category']}]\n"
+                    print(f"[{run_dir.name} | {filename} | filtered data | cat={meta['category']}]\n"
                           f"{n_flagged}/{n_users} users flagged (top-{args.top_k})")
 
                     rows.append({
                         **meta,
                         "run_dir": run_dir.name,
-                        "ckpt_file": os.path.basename(ckpt),
+                        "ckpt_file": filename,
                         "users_with_sensitive_predictions": n_flagged,
                         "total_users": n_users,
                         "sensitive_items_removed": True,
+                        # new performance columns
+                        "Rec@10":  rec10,
+                        "nDCG@10": ndcg10,
+                        "PHR@10":  phr10,
+                        "Rec@20":  rec20,
+                        "nDCG@20": ndcg20,
+                        "PHR@20":  phr20,
                     })
 
+                    # original data prediction count
                     loader = get_data_loader_temporal_split(
                         history_path=args.history_path,
                         future_path=args.future_path,
@@ -226,23 +246,27 @@ def main():
                         users_in_unlearning_set=list(user2items.keys()),
                         user_to_unlearning_items=user2items,
                         user_subset=list(user2items.keys()))
-
                     tqdm_loader = tqdm.tqdm(loader, leave=False, disable=True)
 
                     n_flagged, n_users = count_sensitive_users(model, tqdm_loader, sens_set, args.top_k)
-
-                    print(f"[{run_dir.name} | {os.path.basename(ckpt)} | original data | cat={meta['category']}]\n"
+                    print(f"[{run_dir.name} | {filename} | original data | cat={meta['category']}]\n"
                           f"{n_flagged}/{n_users} users flagged (top-{args.top_k})")
 
                     rows.append({
                         **meta,
                         "run_dir": run_dir.name,
-                        "ckpt_file": os.path.basename(ckpt),
+                        "ckpt_file": filename,
                         "users_with_sensitive_predictions": n_flagged,
                         "total_users": n_users,
                         "sensitive_items_removed": False,
+                        # no performance columns for original
+                        "Rec@10":  None,
+                        "nDCG@10": None,
+                        "PHR@10":  None,
+                        "Rec@20":  None,
+                        "nDCG@20": None,
+                        "PHR@20":  None,
                     })
-
 
                 except Exception as e:
                     print(f"Skipped {ckpt} ({meta['category']}) due to error: {e}")
@@ -250,11 +274,11 @@ def main():
                 finally:
                     del model, loader
                     torch.cuda.empty_cache()
-                    sys.stdout.flush()
 
     out_csv = root / "sensitive_predictions_summary_v2.csv"
     pd.DataFrame(rows).to_csv(out_csv, index=False)
     print(f"\nSummary saved to {out_csv}")
+
 
 if __name__ == "__main__":
     main()
