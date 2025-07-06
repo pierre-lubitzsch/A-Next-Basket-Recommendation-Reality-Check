@@ -158,9 +158,13 @@ if __name__ == "__main__":
             cur_encoder_filepath = f"{directory}/{cur_encoder_filename}"
             cur_decoder_filepath = f"{directory}/{cur_decoder_filename}"
 
+            if not os.path.exists(cur_encoder_filepath) or not os.path.exists(cur_decoder_filepath):
+                continue
+
+            print(f"sensitive item prediction for: {cur_encoder_filename}")
+
             encoder = torch.load(cur_encoder_filepath, map_location=device, weights_only=False)
             decoder = torch.load(cur_decoder_filepath, map_location=device, weights_only=False)
-            print(f"sensitive item prediction for: {cur_encoder_filename}")
             encoder.eval()
             decoder.eval()
 
