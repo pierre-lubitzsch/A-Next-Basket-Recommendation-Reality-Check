@@ -96,6 +96,9 @@ if __name__ == "__main__":
 
         encoder_path = f"{directory}/{encoder_filename}"
         decoder_path = f"{directory}/{decoder_filename}"
+
+        if not os.path.exists(encoder_path) or not os.path.exists(decoder_path):
+            continue
         
         retrain_encoder_filename, retrain_decoder_filename, original_encoder_filename, original_decoder_filename = unlearn_model_to_retrained_model(filename)
         if retrain_encoder_filename is None or retrain_decoder_filename is None:
