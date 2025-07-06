@@ -141,8 +141,8 @@ def count_sensitive_users(model, loader, sensitive_items, k):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default="../save_model_folder/Instacart/")
-    ap.add_argument("--history_path", default="../../../jsondata/history_data.json")
-    ap.add_argument("--future_path", default="../../../jsondata/future_data.json")
+    ap.add_argument("--history_path", default="../../../jsondata/instacart_history.json")
+    ap.add_argument("--future_path", default="../../../jsondata/instacart_future.json")
     ap.add_argument("--batch_size", type=int, default=64)
     ap.add_argument("--item_embed_dim", type=int, default=32)
     ap.add_argument("--top_k", type=int, default=20)
@@ -252,6 +252,30 @@ def main():
                     print(f"[{run_dir.name} | {filename} | original data | cat={meta['category']}]\n"
                           f"{n_flagged}/{n_users} users flagged (top-{args.top_k})")
 
+                    if args.performance_evaluation and any([x in filename or not filename.startswith("unlearn") for x in original_models]):
+                        scores_sensitive_retained = evaluate_best_model(
+                            model=model,
+                            args=args,
+                            users_in_unlearning_set=list(user2items.keys()),
+                            user_to_unlearning_items=user2items,
+                            retrain_str="",
+                            model_path=ckpt,
+                            temporal_split=True,
+                            retrain_flag=False,
+                            seed=meta["seed"],
+                            history_path=args.history_path,
+                            future_path=args.future_path,
+                            batch_size=args.batch_size,
+                        )
+                        # unpack metrics (adjust keys if needed)
+                        rec10  = scores_sensitive_retained.get("recall@10") or scores_sensitive_removed.get("recall_10")
+                        ndcg10 = scores_sensitive_retained.get("ndcg@10")   or scores_sensitive_removed.get("ndcg_10")
+                        phr10  = scores_sensitive_retained.get("phr@10")    or scores_sensitive_removed.get("phr_10")
+                        rec20  = scores_sensitive_retained.get("recall@20") or scores_sensitive_removed.get("recall_20")
+                        ndcg20 = scores_sensitive_retained.get("ndcg@20")   or scores_sensitive_removed.get("ndcg_20")
+                        phr20  = scores_sensitive_retained.get("phr@20")    or scores_sensitive_removed.get("phr_20")
+                        print(f"Performance metrics: rec10={rec10}, ndcg10={ndcg10}, phr10={phr10}, rec20={rec20}, ndcg20={ndcg20}, phr20={phr20}")
+
                     rows.append({
                         **meta,
                         "run_dir": run_dir.name,
@@ -259,13 +283,12 @@ def main():
                         "users_with_sensitive_predictions": n_flagged,
                         "total_users": n_users,
                         "sensitive_items_removed": False,
-                        # no performance columns for original
-                        "Rec@10":  None,
-                        "nDCG@10": None,
-                        "PHR@10":  None,
-                        "Rec@20":  None,
-                        "nDCG@20": None,
-                        "PHR@20":  None,
+                        "Rec@10":  rec10,
+                        "nDCG@10": ndcg10,
+                        "PHR@10":  phr10,
+                        "Rec@20":  rec20,
+                        "nDCG@20": ndcg20,
+                        "PHR@20":  phr20,
                     })
 
                 except Exception as e:
@@ -275,7 +298,7 @@ def main():
                     del model, loader
                     torch.cuda.empty_cache()
 
-    out_csv = root / "sensitive_predictions_summary_v2.csv"
+    out_csv = root / "sensitive_predictions_original_model.csv"
     pd.DataFrame(rows).to_csv(out_csv, index=False)
     print(f"\nSummary saved to {out_csv}")
 
