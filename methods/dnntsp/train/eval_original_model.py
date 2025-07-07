@@ -120,7 +120,7 @@ def count_sensitive_users(model, loader, sensitive_items, k):
                 g, nf, ew, L, n, y, uf)
 
             # forward
-            logits = model(g, nf, ew, L, n, y)
+            logits = model(g, nf, ew, L, n, uf)
             topk = torch.topk(logits, k, dim=1).indices.cpu()  # shape [B, k]
 
             # per-row membership test
@@ -196,10 +196,10 @@ def main():
                         # unpack metrics (adjust keys if needed)
                         rec10  = scores_sensitive_removed.get("recall@10") or scores_sensitive_removed.get("recall_10")
                         ndcg10 = scores_sensitive_removed.get("ndcg@10")   or scores_sensitive_removed.get("ndcg_10")
-                        phr10  = scores_sensitive_removed.get("phr@10")    or scores_sensitive_removed.get("phr_10")
+                        phr10  = scores_sensitive_removed.get("phr@10")    or scores_sensitive_removed.get("PHR_10")
                         rec20  = scores_sensitive_removed.get("recall@20") or scores_sensitive_removed.get("recall_20")
                         ndcg20 = scores_sensitive_removed.get("ndcg@20")   or scores_sensitive_removed.get("ndcg_20")
-                        phr20  = scores_sensitive_removed.get("phr@20")    or scores_sensitive_removed.get("phr_20")
+                        phr20  = scores_sensitive_removed.get("phr@20")    or scores_sensitive_removed.get("PHR_20")
                         print(f"Performance metrics: rec10={rec10}, ndcg10={ndcg10}, phr10={phr10}, rec20={rec20}, ndcg20={ndcg20}, phr20={phr20}")
 
                     # filtered data prediction count
@@ -268,12 +268,12 @@ def main():
                             batch_size=args.batch_size,
                         )
                         # unpack metrics (adjust keys if needed)
-                        rec10  = scores_sensitive_retained.get("recall@10") or scores_sensitive_removed.get("recall_10")
-                        ndcg10 = scores_sensitive_retained.get("ndcg@10")   or scores_sensitive_removed.get("ndcg_10")
-                        phr10  = scores_sensitive_retained.get("phr@10")    or scores_sensitive_removed.get("phr_10")
-                        rec20  = scores_sensitive_retained.get("recall@20") or scores_sensitive_removed.get("recall_20")
-                        ndcg20 = scores_sensitive_retained.get("ndcg@20")   or scores_sensitive_removed.get("ndcg_20")
-                        phr20  = scores_sensitive_retained.get("phr@20")    or scores_sensitive_removed.get("phr_20")
+                        rec10  = scores_sensitive_retained.get("recall@10") or scores_sensitive_retained.get("recall_10")
+                        ndcg10 = scores_sensitive_retained.get("ndcg@10")   or scores_sensitive_retained.get("ndcg_10")
+                        phr10  = scores_sensitive_retained.get("phr@10")    or scores_sensitive_retained.get("PHR_10")
+                        rec20  = scores_sensitive_retained.get("recall@20") or scores_sensitive_retained.get("recall_20")
+                        ndcg20 = scores_sensitive_retained.get("ndcg@20")   or scores_sensitive_retained.get("ndcg_20")
+                        phr20  = scores_sensitive_retained.get("phr@20")    or scores_sensitive_retained.get("PHR_20")
                         print(f"Performance metrics: rec10={rec10}, ndcg10={ndcg10}, phr10={phr10}, rec20={rec20}, ndcg20={ndcg20}, phr20={phr20}")
 
                     rows.append({

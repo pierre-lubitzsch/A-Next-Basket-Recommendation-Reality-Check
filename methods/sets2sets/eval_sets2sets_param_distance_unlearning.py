@@ -154,6 +154,12 @@ if __name__ == "__main__":
             sensitive_category = filename.split("sensitive_category_")[-1].split("_")[0]
             user_to_unlearning_items = user_to_unlearning_items[sensitive_category]
 
+        category_to_items = {
+            "meat": [5, 95, 96, 15, 33, 34, 35, 49, 106, 122],
+            "alcohol": [27, 28, 62, 124, 134],
+            "baby": [82, 92, 102, 56],
+        }
+
         # sensitive item prediction:
         for cur_encoder_filename, cur_decoder_filename in [(encoder_filename, decoder_filename), (retrain_encoder_filename, retrain_decoder_filename), (original_encoder_filename, original_decoder_filename)]:
             if cur_encoder_filename in filenames_seen:
@@ -213,7 +219,7 @@ if __name__ == "__main__":
                         predicted_basket = output_vectors[0]
                         predicted_basket_ints_set = set(int(t.item()) for t in predicted_basket)
 
-                        sensitive_items_predicted = predicted_basket_ints_set & set(user_to_unlearning_items[user])
+                        sensitive_items_predicted = predicted_basket_ints_set & set(category_to_items[sensitive_category])
                         sensitive_item_in_output_basket_count += int(len(sensitive_items_predicted) > 0)
                     
                     print(f"{sensitive_item_in_output_basket_count}/{len(cur_user_to_unlearning_items)} users have sensitive items in their output basket")
