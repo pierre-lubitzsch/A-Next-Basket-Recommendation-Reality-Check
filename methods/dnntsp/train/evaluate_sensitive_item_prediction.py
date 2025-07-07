@@ -142,8 +142,8 @@ def count_sensitive_users(model, loader, sensitive_items, k):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default="../save_model_folder/Instacart/")
-    ap.add_argument("--history_path", default="../../../jsondata/history_data.json")
-    ap.add_argument("--future_path", default="../../../jsondata/future_data.json")
+    ap.add_argument("--history_path", default="../../../jsondata/instacart_history.json")
+    ap.add_argument("--future_path", default="../../../jsondata/instacart_future.json")
     ap.add_argument("--batch_size", type=int, default=64)
     ap.add_argument("--item_embed_dim", type=int, default=32)
     ap.add_argument("--top_k", type=int, default=20)
