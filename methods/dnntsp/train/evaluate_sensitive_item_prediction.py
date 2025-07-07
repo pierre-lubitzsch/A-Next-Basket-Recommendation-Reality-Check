@@ -235,7 +235,7 @@ def main():
 
                     tqdm_loader = tqdm.tqdm(loader, leave=False, disable=True)
 
-                    n_flagged, n_users = count_sensitive_users(model, tqdm_loader, sens_set, args.top_k)
+                    n_flagged, n_users = count_sensitive_users(model, tqdm_loader, category_to_items[meta["category"]], args.top_k)
 
                     print(f"[{run_dir.name} | {os.path.basename(ckpt)} | original data | cat={meta['category']}]\n"
                           f"{n_flagged}/{n_users} users flagged (top-{args.top_k})")
