@@ -154,6 +154,12 @@ def main():
     rows = []
     original_models = [f"model_best_seed_{s}.pkl" for s in [2, 3, 5, 7, 11]]
 
+    category_to_items = {
+        "meat": [5, 95, 96, 15, 33, 34, 35, 49, 106, 122],
+        "alcohol": [27, 28, 62, 124, 134],
+        "baby": [82, 92, 102, 56],
+    }
+
     for run_dir in list_run_dirs(root):
         for ckpt in discover_ckpts(run_dir):
             if not any([x in ckpt for x in original_models]):
@@ -215,7 +221,7 @@ def main():
                         user_subset=list(user2items.keys()))
                     tqdm_loader = tqdm.tqdm(loader, leave=False, disable=True)
 
-                    n_flagged, n_users = count_sensitive_users(model, tqdm_loader, sens_set, args.top_k)
+                    n_flagged, n_users = count_sensitive_users(model, tqdm_loader, category_to_items[meta["category"]], args.top_k)
                     print(f"[{run_dir.name} | {filename} | filtered data | cat={meta['category']}]\n"
                             f"{n_flagged}/{n_users} users flagged (top-{args.top_k})")
 
@@ -248,7 +254,7 @@ def main():
                         user_subset=list(user2items.keys()))
                     tqdm_loader = tqdm.tqdm(loader, leave=False, disable=True)
 
-                    n_flagged, n_users = count_sensitive_users(model, tqdm_loader, sens_set, args.top_k)
+                    n_flagged, n_users = count_sensitive_users(model, tqdm_loader, category_to_items[meta["category"]], args.top_k)
                     print(f"[{run_dir.name} | {filename} | original data | cat={meta['category']}]\n"
                             f"{n_flagged}/{n_users} users flagged (top-{args.top_k})")
 
