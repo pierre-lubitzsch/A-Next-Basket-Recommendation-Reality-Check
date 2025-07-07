@@ -229,7 +229,7 @@ if __name__ == "__main__":
         print("\n\n")
     
 
-    out_file = f"{directory}/sets2sets_unlearning_sensitive_evaluation.csv"
+    out_file = f"{directory}/sets2sets_unlearning_sensitive_evaluation_v2.csv"
     with open(out_file, "w") as f:
         writer = csv.writer(f)
         writer.writerow(["unlearned_encoder", "retrained_encoder", "original encoder", "unlearned_vs_retrained_mse", "original_vs_retrained_mse", "unlearned_vs_original_mse", "k", "sensitive_encoder_filename", "sensitive_item_in_output_basket_count"])
