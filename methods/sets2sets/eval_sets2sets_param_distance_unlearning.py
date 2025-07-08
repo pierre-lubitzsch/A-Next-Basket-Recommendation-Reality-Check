@@ -198,13 +198,13 @@ if __name__ == "__main__":
                     print(f"k = {k}")            
                     sensitive_item_in_output_basket_count = 0
                     # sensitive item prediction:
-                    for user in user_to_unlearning_items:
+                    for user in cur_user_to_unlearning_items:
                         # training_pair = training_pairs[iter - 1]
                         # input_variable = training_pair[0]
                         # target_variable = training_pair[1]
                         
                         unpadded_baskets = history_data[user][1:-1] + [future_data[user][1]]
-                        clean_unpadded_baskets = [[item for item in basket if item not in user_to_unlearning_items[user]] for basket in unpadded_baskets]
+                        clean_unpadded_baskets = [[item for item in basket if item not in cur_user_to_unlearning_items[user]] for basket in unpadded_baskets]
                         clean_unpadded_baskets = list(filter(lambda x: len(x) > 0, clean_unpadded_baskets))
                         if len(clean_unpadded_baskets) < 4:
                             continue
@@ -229,7 +229,7 @@ if __name__ == "__main__":
         print("\n\n")
     
 
-    out_file = f"{directory}/sets2sets_unlearning_sensitive_evaluation_v2.csv"
+    out_file = f"{directory}/sets2sets_unlearning_sensitive_evaluation_v2_meat.csv"
     with open(out_file, "w") as f:
         writer = csv.writer(f)
         writer.writerow(["unlearned_encoder", "retrained_encoder", "original encoder", "unlearned_vs_retrained_mse", "original_vs_retrained_mse", "unlearned_vs_original_mse", "k", "sensitive_encoder_filename", "sensitive_item_in_output_basket_count"])

@@ -202,10 +202,10 @@ def main():
                         # unpack metrics (adjust keys if needed)
                         rec10  = scores_sensitive_removed.get("recall@10") or scores_sensitive_removed.get("recall_10")
                         ndcg10 = scores_sensitive_removed.get("ndcg@10")   or scores_sensitive_removed.get("ndcg_10")
-                        phr10  = scores_sensitive_removed.get("phr@10")    or scores_sensitive_removed.get("PHR_10")
+                        phr10  = scores_sensitive_removed.get("phr@10")    or scores_sensitive_removed.get("hitrate_10")
                         rec20  = scores_sensitive_removed.get("recall@20") or scores_sensitive_removed.get("recall_20")
                         ndcg20 = scores_sensitive_removed.get("ndcg@20")   or scores_sensitive_removed.get("ndcg_20")
-                        phr20  = scores_sensitive_removed.get("phr@20")    or scores_sensitive_removed.get("PHR_20")
+                        phr20  = scores_sensitive_removed.get("phr@20")    or scores_sensitive_removed.get("hitrate_20")
                         print(f"Performance metrics: rec10={rec10}, ndcg10={ndcg10}, phr10={phr10}, rec20={rec20}, ndcg20={ndcg20}, phr20={phr20}")
 
                     # filtered data prediction count
@@ -276,10 +276,10 @@ def main():
                         # unpack metrics (adjust keys if needed)
                         rec10  = scores_sensitive_retained.get("recall@10") or scores_sensitive_retained.get("recall_10")
                         ndcg10 = scores_sensitive_retained.get("ndcg@10")   or scores_sensitive_retained.get("ndcg_10")
-                        phr10  = scores_sensitive_retained.get("phr@10")    or scores_sensitive_retained.get("PHR_10")
+                        phr10  = scores_sensitive_retained.get("phr@10")    or scores_sensitive_retained.get("hitrate_10")
                         rec20  = scores_sensitive_retained.get("recall@20") or scores_sensitive_retained.get("recall_20")
                         ndcg20 = scores_sensitive_retained.get("ndcg@20")   or scores_sensitive_retained.get("ndcg_20")
-                        phr20  = scores_sensitive_retained.get("phr@20")    or scores_sensitive_retained.get("PHR_20")
+                        phr20  = scores_sensitive_retained.get("phr@20")    or scores_sensitive_retained.get("hitrate_20")
                         print(f"Performance metrics: rec10={rec10}, ndcg10={ndcg10}, phr10={phr10}, rec20={rec20}, ndcg20={ndcg20}, phr20={phr20}")
 
                     rows.append({
