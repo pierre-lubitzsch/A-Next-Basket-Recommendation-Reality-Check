@@ -344,14 +344,10 @@ def main():
 
                     recall, ndcg, hitrate = np.mean(rec), np.mean(NDCG), n_hit / len(user_list)
                     
-                    print(f"Recall@{k}: {recall:.4f}\nNDCG@{k}: {ndcg:.4f}\nPHR@{k}: {hitrate:.4f}\n")
-                    
                     # results.append([encoder_filename, retrain_encoder_filename, original_encoder_filename, param_distance_unlearned_retrained, param_distance_original_retrained, param_distance_unlearned_original, k, cur_encoder_filename, sensitive_item_in_output_basket_count])
                     performance_metrics_rnh.append((recall, ndcg, hitrate))
-                    if user in cur_user_to_unlearning_items:
-                        print(f"{sensitive_item_in_output_basket_count}/{len(cur_user_to_unlearning_items)} users have sensitive items in their output basket")
-                        cur_sensitive_item_percentage = sensitive_item_in_output_basket_count / len(cur_user_to_unlearning_items)
-                        sensitive_item_percentages.append(f"{(100 * cur_sensitive_item_percentage):.2f}%")
+                    cur_sensitive_item_percentage = sensitive_item_in_output_basket_count / len(cur_user_to_unlearning_items)
+                    sensitive_item_percentages.append(f"{(100 * cur_sensitive_item_percentage):.2f}%")
 
 
                 cur_category = sensitive_category
