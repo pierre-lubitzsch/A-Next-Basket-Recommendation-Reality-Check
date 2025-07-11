@@ -175,12 +175,11 @@ def main():
         }
 
         # sensitive item prediction:
-        for cur_encoder_filename, cur_decoder_filename in [(retrain_encoder_filename, retrain_decoder_filename), (encoder_filename, decoder_filename)]:#, (original_encoder_filename, original_decoder_filename)]:
+        for cur_encoder_filename, cur_decoder_filename in [(encoder_filename, decoder_filename), (retrain_encoder_filename, retrain_decoder_filename)]:#, (original_encoder_filename, original_decoder_filename)]:
             if cur_encoder_filename in filenames_seen:
                 continue
 
             compare_to_retrain = "retrain" not in cur_encoder_filename
-
             if compare_to_retrain:
                 retrained_encoder = torch.load(retrain_encoder_path, map_location=device, weights_only=False)
                 retrained_decoder = torch.load(retrain_decoder_path, map_location=device, weights_only=False)
