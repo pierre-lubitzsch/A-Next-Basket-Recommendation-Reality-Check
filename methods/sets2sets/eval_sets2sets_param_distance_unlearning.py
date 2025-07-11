@@ -220,7 +220,7 @@ def main():
             kl_div_list = []
 
             with torch.no_grad():
-                for k_idx, k in topk_list:
+                for k_idx, k in enumerate(topk_list):
                     prec = []
                     rec = []
                     F = []
