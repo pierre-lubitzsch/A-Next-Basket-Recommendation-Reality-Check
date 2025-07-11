@@ -218,7 +218,7 @@ def main():
 
             cur_seed = int(cur_encoder_filename.split("seed_")[-1].split("_")[0])
             cur_category = sensitive_category
-            cur_requests = round(users_to_take / len(cur_user_to_unlearning_items))
+            cur_requests = round(100 * users_to_take / len(cur_user_to_unlearning_items))
             cur_algorithm = "Baseline"
             if "unlearn_epoch" not in cur_encoder_filename:
                 cur_algorithm = "Retrain"
@@ -229,21 +229,9 @@ def main():
                         cur_algorithm = unlearn_algo_name
                         break
 
-            # load elapsed time from log file
-            print(stats_from_log.head())
-            exit(0)
-            cur_time_elapsed = stats_from_log[
-                (stats_from_log["seed"] == cur_seed)
-                & (stats_from_log["algorithm"] == cur_algorithm.lower())
-                & (stats_from_log["category"] == cur_category.lower())
-                & (stats_from_log["Frac"] == f"{round(cur_requests * 4 / 100)}/4")]["elapsed"].values[0]
-            cur_time = cur_time_elapsed / len(cur_user_to_unlearning_items) if len(cur_user_to_unlearning_items) > 0 else 0
-            exit(0)
-
             performance_metrics_rnh = []
             sensitive_item_percentages = []
             kl_div_list = []
-            assert False
 
             with torch.no_grad():
                 for k_idx, k in enumerate(topk_list):
@@ -364,7 +352,7 @@ def main():
 
 
                 cur_category = sensitive_category
-                cur_requests = round(users_to_take / len(cur_user_to_unlearning_items))
+                cur_requests = round(100 * users_to_take / len(cur_user_to_unlearning_items))
 
                 cur_algorithm = "Baseline"
                 if "unlearn_epoch" not in cur_encoder_filename:
