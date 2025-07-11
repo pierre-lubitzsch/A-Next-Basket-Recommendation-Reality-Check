@@ -378,7 +378,7 @@ def main():
                      & (stats_from_log["Frac"] == f"{round(cur_requests * 4 / 100)}/4")]["elapsed"].values[0]
                 cur_time = cur_time_elapsed / len(cur_user_to_unlearning_items) if len(cur_user_to_unlearning_items) > 0 else 0
                 cur_kl_div = np.mean(kl_div_list) if compare_to_retrain else 0
-                cur_sensitive_items_10, cur_sensitive_items_20 = cur_sensitive_item_percentage
+                cur_sensitive_items_10, cur_sensitive_items_20 = sensitive_item_percentages
 
                 results.append((
                     cur_category,
