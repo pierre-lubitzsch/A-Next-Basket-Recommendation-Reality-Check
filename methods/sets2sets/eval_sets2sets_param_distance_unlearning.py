@@ -257,7 +257,7 @@ def main():
                     sensitive_item_in_output_basket_count = 0
                     # sensitive item prediction:
                     for user in user_list:#cur_user_to_unlearning_items:
-                        if len(kl_div_list) >= 1 and sensitive_item_in_output_basket_count >= 1:
+                        if len(kl_div_list) >= 3:
                             print(kl_div_list)
                             break
                         # training_pair = training_pairs[iter - 1]
