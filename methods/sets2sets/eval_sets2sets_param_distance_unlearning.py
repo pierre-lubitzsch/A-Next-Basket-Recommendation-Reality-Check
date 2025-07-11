@@ -285,9 +285,6 @@ def main(args):
                             predicted_basket = output_vectors[0]
                             predicted_basket_ints_set = set(int(t.item()) for t in predicted_basket)
 
-                            print(predicted_basket_ints_set)
-                            print(set(category_to_items[sensitive_category]))
-                            exit(0)
                             sensitive_items_predicted = predicted_basket_ints_set & set(category_to_items[sensitive_category])
                             sensitive_item_in_output_basket_count += int(len(sensitive_items_predicted) > 0)
                         
