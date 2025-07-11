@@ -378,6 +378,23 @@ def main():
                     cur_kl_div,
                 ))
 
+                print("Appended result:\n" \
+                    f"  Category:               {cur_category}\n" \
+                    f"  Requests:               {cur_requests}\n" \
+                    f"  Algorithm:              {cur_algorithm}\n" \
+                    f"  Rec@10:              {cur_recall_10:.4f}\n" \
+                    f"  nDCG@10:                {cur_ndcg_10:.4f}\n" \
+                    f"  PHR@10:                 {cur_hitrate_10:.4f}\n" \
+                    f"  Rec@20:              {cur_recall_20:.4f}\n" \
+                    f"  nDCG@20:                {cur_ndcg_20:.4f}\n" \
+                    f"  PHR@20:                 {cur_hitrate_20:.4f}\n" \
+                    f"  Seed:                   {cur_seed}\n" \
+                    f"  Time per request (s):   {cur_time:.4f}\n" \
+                    f"  Sensitive items @10:    {cur_sensitive_items_10}\n" \
+                    f"  Sensitive items @20:    {cur_sensitive_items_20}\n" \
+                    f"  KL(Retrained || Unlearned): {cur_kl_div:.6f}\n\n"
+                )
+
         filenames_seen |= set([encoder_filename, retrain_encoder_filename])
         print("\n\n")
         sys.stdout.flush()
