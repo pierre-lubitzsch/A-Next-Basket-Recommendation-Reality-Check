@@ -84,6 +84,19 @@ def main():
     topk_list = [10, 20]
     next_k_step = 1
 
+    history_file = "../../jsondata/instacart_history.json"
+    future_file = "../../jsondata/instacart_future.json"
+    keyset_file = "../../keyset/instacart_keyset_0.json"
+
+    with open(history_file, 'r') as f:
+        history_data = json.load(f)
+    with open(future_file, 'r') as f:
+        future_data = json.load(f)
+    with open(keyset_file, 'r') as f:
+        keyset = json.load(f)
+        input_size = keyset['item_num']
+    stats_from_log = pd.read_csv("./sets2sets_combined_results.csv")
+
     results = []
     filenames_seen = set()
     
@@ -138,24 +151,13 @@ def main():
 
         # del original_encoder, original_decoder, unlearned_encoder, unlearned_decoder, retrained_encoder, retrained_decoder
 
-        history_file = "../../jsondata/instacart_history.json"
-        future_file = "../../jsondata/instacart_future.json"
-        keyset_file = "../../keyset/instacart_keyset_0.json"
+        
         unlearning_data_file = f"../../unlearning_data/dataset_instacart_seed_{filename.split('_seed_')[-1].split('_')[0]}_method_sensitive_unlearning_fraction_0.001.pkl"
 
-        with open(history_file, 'r') as f:
-            history_data = json.load(f)
-        with open(future_file, 'r') as f:
-            future_data = json.load(f)
-        with open(keyset_file, 'r') as f:
-            keyset = json.load(f)
-            input_size = keyset['item_num']
         with open(unlearning_data_file, "rb") as f:
             user_to_unlearning_items = pickle.load(f)
             sensitive_category = filename.split("sensitive_category_")[-1].split("_")[0]
             user_to_unlearning_items = user_to_unlearning_items[sensitive_category]
-        stats_from_log = pd.read_csv("./sets2sets_combined_results.csv")
-
 
         user_list = list(future_data.keys())
 
@@ -241,6 +243,7 @@ def main():
             performance_metrics_rnh = []
             sensitive_item_percentages = []
             kl_div_list = []
+            assert False
 
             with torch.no_grad():
                 for k_idx, k in enumerate(topk_list):
