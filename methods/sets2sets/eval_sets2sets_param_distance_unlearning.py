@@ -257,9 +257,6 @@ def main():
                     sensitive_item_in_output_basket_count = 0
                     # sensitive item prediction:
                     for user in user_list:#cur_user_to_unlearning_items:
-                        if len(kl_div_list) >= 3:
-                            print(kl_div_list)
-                            break
                         # training_pair = training_pairs[iter - 1]
                         # input_variable = training_pair[0]
                         # target_variable = training_pair[1]
@@ -343,7 +340,7 @@ def main():
                             n_hit += 1
 
                     recall, ndcg, hitrate = np.mean(rec), np.mean(NDCG), n_hit / len(user_list)
-                    
+
                     # results.append([encoder_filename, retrain_encoder_filename, original_encoder_filename, param_distance_unlearned_retrained, param_distance_original_retrained, param_distance_unlearned_original, k, cur_encoder_filename, sensitive_item_in_output_basket_count])
                     performance_metrics_rnh.append((recall, ndcg, hitrate))
                     cur_sensitive_item_percentage = sensitive_item_in_output_basket_count / len(cur_user_to_unlearning_items)
