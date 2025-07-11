@@ -414,7 +414,7 @@ def trainIters(data_history, data_future, output_size, encoder, decoder, model_n
 cosine_sim = []
 pair_cosine_sim = []
 
-def decoding_next_k_step(encoder, decoder, input_variable, target_variable, output_size, k, activate_codes_num):
+def decoding_next_k_step(encoder, decoder, input_variable, target_variable, output_size, k, activate_codes_num, return_decoder_output=False):
     # k is the next k step.
     encoder_hidden = encoder.initHidden()
 
@@ -456,6 +456,7 @@ def decoding_next_k_step(encoder, decoder, input_variable, target_variable, outp
     topk = 400
     decoded_vectors = []
     prob_vectors = []
+    decoder_output = None
     # k is the number of steps need to predicted, for next basket is 1
     for di in range(k):
         decoder_output, decoder_hidden, decoder_attention = decoder(
@@ -488,6 +489,8 @@ def decoding_next_k_step(encoder, decoder, input_variable, target_variable, outp
             tmp.append(topi[0][i])
         prob_vectors.append(tmp)
 
+    if return_decoder_output:
+        return decoded_vectors, prob_vectors, decoder_output
     return decoded_vectors, prob_vectors
 
 

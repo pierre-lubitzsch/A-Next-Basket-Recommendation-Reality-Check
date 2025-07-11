@@ -221,6 +221,7 @@ def main():
                 if user_sensitive_items:
                     eligible_users[user] = sorted(user_sensitive_items)
 
+
             print(f"[{category}] Eligible users: {len(eligible_users)}")
 
             # 2. Sample users until unlearning threshold is met (no trimming)
