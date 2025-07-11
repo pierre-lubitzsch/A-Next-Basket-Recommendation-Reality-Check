@@ -9,7 +9,6 @@ import json
 import pandas as pd
 import numpy as np
 import torch
-import torch.nn.functional as F
 
 from sets2sets_new import EncoderRNN_new, AttnDecoderRNN_new, decoding_next_k_step, get_precision_recall_Fscore, get_HT, get_NDCG
 
@@ -284,7 +283,7 @@ def main():
                             # eps for numeric stability
                             eps = 1e-20
                             log_p_unlearned = torch.log(p_unlearned + eps)
-                            kl = F.kl_div(log_p_unlearned, p_retrained, reduction='batchmean')
+                            kl = torch.nn.functional.kl_div(log_p_unlearned, p_retrained, reduction='batchmean')
                             
                             kl_div_list.append(kl)
 
