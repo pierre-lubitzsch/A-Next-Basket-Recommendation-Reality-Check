@@ -257,6 +257,8 @@ def main():
                     sensitive_item_in_output_basket_count = 0
                     # sensitive item prediction:
                     for user in user_list:#cur_user_to_unlearning_items:
+                        if len(kl_div_list) >= 3:
+                            break
                         # training_pair = training_pairs[iter - 1]
                         # input_variable = training_pair[0]
                         # target_variable = training_pair[1]
@@ -301,7 +303,7 @@ def main():
                             log_p_unlearned = torch.log(p_unlearned + eps)
                             kl = torch.nn.functional.kl_div(log_p_unlearned, p_retrained, reduction='batchmean')
                             
-                            kl_div_list.append(kl)
+                            kl_div_list.append(kl.cpu().item())
 
                         # performance metrics calculated for everything
                         output_size = input_size
