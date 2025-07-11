@@ -7,6 +7,7 @@ import csv
 import sys
 import json
 import pandas as pd
+import argparse
 import numpy as np
 import torch
 
@@ -74,7 +75,7 @@ def coupled_distance(enc_a, dec_a, enc_b, dec_b, device="cpu"):
     return (param_diff ** 2).mean().item()
 
 
-def main():
+def main(args):
     use_cuda = True
     seeds = [2, 3, 5, 7, 11]
     categories = ["baby", "alcohol", "meat"]
@@ -87,6 +88,20 @@ def main():
     history_file = "../../jsondata/instacart_history.json"
     future_file = "../../jsondata/instacart_future.json"
     keyset_file = "../../keyset/instacart_keyset_0.json"
+
+    category_to_aisles = {
+        "meat": [5, 95, 96, 15, 33, 34, 35, 49, 106, 122],
+        "alcohol": [27, 28, 62, 124, 134],
+        "baby": [82, 92, 102, 56],
+    }
+
+    products_with_aisle_id_filepath = f"../../dataset/instacart_products.csv"
+    products = pd.read_csv(products_with_aisle_id_filepath)
+
+    category_to_items = {
+        cat: set(products[products["aisle_id"].isin(aisle_ids)]["product_id"])
+        for cat, aisle_ids in category_to_aisles.items()
+    }
 
     with open(history_file, 'r') as f:
         history_data = json.load(f)
@@ -105,7 +120,7 @@ def main():
     directory = "./models"
 
     for filename in sorted(os.listdir(directory)):
-        if "decoder" in filename or ("unlearn_epoch" not in filename):
+        if "decoder" in filename or ("unlearn_epoch" not in filename) or (args.category != "all" and f"category_{args.category}" not in filename):
             continue
         
         encoder_filename = filename
@@ -161,21 +176,6 @@ def main():
 
         user_list = list(future_data.keys())
 
-        category_to_aisles = {
-            "meat": [5, 95, 96, 15, 33, 34, 35, 49, 106, 122],
-            "alcohol": [27, 28, 62, 124, 134],
-            "baby": [82, 92, 102, 56],
-        }
-
-        products_with_aisle_id_filepath = f"../../dataset/instacart_products.csv"
-        products = pd.read_csv(products_with_aisle_id_filepath)
-
-        category_to_items = {
-            cat: set(products[products["aisle_id"].isin(aisle_ids)]["product_id"])
-            for cat, aisle_ids in category_to_aisles.items()
-        }
-
-        # sensitive item prediction:
         for cur_encoder_filename, cur_decoder_filename in [(encoder_filename, decoder_filename), (retrain_encoder_filename, retrain_decoder_filename)]:#, (original_encoder_filename, original_decoder_filename)]:
             if cur_encoder_filename in filenames_seen:
                 continue
@@ -285,6 +285,9 @@ def main():
                             predicted_basket = output_vectors[0]
                             predicted_basket_ints_set = set(int(t.item()) for t in predicted_basket)
 
+                            print(predicted_basket_ints_set)
+                            print(set(category_to_items[sensitive_category]))
+                            exit(0)
                             sensitive_items_predicted = predicted_basket_ints_set & set(category_to_items[sensitive_category])
                             sensitive_item_in_output_basket_count += int(len(sensitive_items_predicted) > 0)
                         
@@ -412,7 +415,7 @@ def main():
         sys.stdout.flush()
     
 
-    out_file_per_seed = f"{directory}/sets2sets_unlearning_sensitive_evaluation_per_seed.csv"
+    out_file_per_seed = f"{directory}/sets2sets_unlearning_sensitive_evaluation_per_seed_category_{args.category}.csv"
     columns = [
         "Category",
         "Requests",
@@ -433,7 +436,7 @@ def main():
     df = pd.DataFrame(results, columns=columns)
     df.to_csv(out_file_per_seed, index=False)
 
-    out_file_averaged_over_seeds = f"{directory}/sets2sets_unlearning_sensitive_evaluation_averaged_over_seeds.csv"
+    out_file_averaged_over_seeds = f"{directory}/sets2sets_unlearning_sensitive_evaluation_averaged_over_seeds_category_{args.category}.csv"
     group_cols = ["Category", "Requests", "Algorithm"]
     avg_cols = [
         "Rec@10", "nDCG@10", "PHR@10",
@@ -456,4 +459,15 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Evaluate Sets2Sets unlearning metrics for a single sensitive category"
+    )
+    parser.add_argument(
+        "-c",
+        "--category",
+        default="all",
+        help="Sensitive category to process (e.g. baby, alcohol, meat). A value of 'all' will process all categories.",
+        choices=["all", "baby", "alcohol", "meat"],
+    )
+    args = parser.parse_args()
+    main(args)
