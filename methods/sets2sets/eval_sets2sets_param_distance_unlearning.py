@@ -193,8 +193,6 @@ def main(args):
             if not os.path.exists(cur_encoder_filepath) or not os.path.exists(cur_decoder_filepath):
                 continue
 
-            print(f"sensitive item prediction for: {cur_encoder_filename}")
-
             encoder = torch.load(cur_encoder_filepath, map_location=device, weights_only=False)
             decoder = torch.load(cur_decoder_filepath, map_location=device, weights_only=False)
             encoder.eval()
@@ -220,6 +218,7 @@ def main(args):
             cur_category = sensitive_category
             cur_requests = round(100 * users_to_take / len(cur_user_to_unlearning_items))
             cur_algorithm = "Baseline"
+
             if "unlearn_epoch" not in cur_encoder_filename:
                 cur_algorithm = "Retrain"
             else:
@@ -228,6 +227,18 @@ def main(args):
                     if unlearn_algo_name.lower() in cur_encoder_filename:
                         cur_algorithm = unlearn_algo_name
                         break
+            
+            cur_time_elapsed = stats_from_log[
+                (stats_from_log["seed"] == cur_seed)
+                    & (stats_from_log["algorithm"] == cur_algorithm.lower())
+                    & (stats_from_log["category"] == cur_category.lower())
+                    & (stats_from_log["Frac"] == f"{round(cur_requests * 4 / 100)}/4")
+            ]["elapsed"]
+
+            # training did not converge in this case
+            if len(cur_time_elapsed) == 0:
+                continue
+
 
             performance_metrics_rnh = []
             sensitive_item_percentages = []
