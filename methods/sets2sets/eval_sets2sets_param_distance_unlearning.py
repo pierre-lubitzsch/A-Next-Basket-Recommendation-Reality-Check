@@ -301,12 +301,12 @@ def main(args):
                             # eps for numeric stability
                             eps = 1e-20
                             log_p_unlearned = torch.log(p_unlearned + eps)
-                            log_p_retrained = torch.log(p_retrained + eps)
+                            log_mid = torch.log(mid + eps)
                             kl = torch.nn.functional.kl_div(log_p_unlearned, p_retrained, reduction='batchmean')
                             kl_div_list.append(kl.cpu().item())
 
-                            kl_p_m = torch.nn.functional.kl_div(log_p_unlearned, mid, reduction='batchmean')
-                            kl_q_m = torch.nn.functional.kl_div(log_p_retrained, mid, reduction='batchmean')
+                            kl_p_m = torch.nn.functional.kl_div(log_mid, p_retrained, reduction='batchmean')
+                            kl_q_m = torch.nn.functional.kl_div(log_mid, p_unlearned, reduction='batchmean')
                             js = (kl_p_m + kl_q_m) / 2
                             js_div_list.append(js.cpu().item())
 
