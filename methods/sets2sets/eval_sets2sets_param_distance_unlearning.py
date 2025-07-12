@@ -232,6 +232,7 @@ def main(args):
             performance_metrics_rnh = []
             sensitive_item_percentages = []
             kl_div_list = []
+            js_div_list = []
 
             with torch.no_grad():
                 for k_idx, k in enumerate(topk_list):
@@ -295,13 +296,19 @@ def main(args):
                             
                             p_unlearned = decoder_output
                             p_retrained = retrain_decoder_output
+                            mid = (p_unlearned + p_retrained) / 2
 
                             # eps for numeric stability
                             eps = 1e-20
                             log_p_unlearned = torch.log(p_unlearned + eps)
+                            log_p_retrained = torch.log(p_retrained + eps)
                             kl = torch.nn.functional.kl_div(log_p_unlearned, p_retrained, reduction='batchmean')
-                            
                             kl_div_list.append(kl.cpu().item())
+
+                            kl_p_m = torch.nn.functional.kl_div(log_p_unlearned, mid, reduction='batchmean')
+                            kl_q_m = torch.nn.functional.kl_div(log_p_retrained, mid, reduction='batchmean')
+                            js = (kl_p_m + kl_q_m) / 2
+                            js_div_list.append(js.cpu().item())
 
                         # performance metrics calculated for everything
                         output_size = input_size
@@ -371,6 +378,7 @@ def main(args):
                      & (stats_from_log["Frac"] == f"{round(cur_requests * 4 / 100)}/4")]["elapsed"].values[0]
                 cur_time = cur_time_elapsed / len(cur_user_to_unlearning_items) if len(cur_user_to_unlearning_items) > 0 else 0
                 cur_kl_div = np.mean(kl_div_list) if compare_to_retrain else 0
+                cur_js_div = np.mean(js_div_list) if compare_to_retrain else 0
                 cur_sensitive_items_10, cur_sensitive_items_20 = sensitive_item_percentages
 
                 results.append((
@@ -388,6 +396,7 @@ def main(args):
                     cur_sensitive_items_10,
                     cur_sensitive_items_20,
                     cur_kl_div,
+                    cur_js_div,
                 ))
 
                 print("Appended result:\n" \
@@ -404,7 +413,8 @@ def main(args):
                     f"  Time per request (s):   {cur_time:.4f}\n" \
                     f"  Sensitive items @10:    {cur_sensitive_items_10}\n" \
                     f"  Sensitive items @20:    {cur_sensitive_items_20}\n" \
-                    f"  KL(Retrained || Unlearned): {cur_kl_div:.6f}\n\n"
+                    f"  KL(Retrained || Unlearned): {cur_kl_div:.6f}\n" \
+                    f"  JS(Retrained || Unlearned): {cur_js_div:.6f}\n\n"
                 )
 
         filenames_seen |= set([encoder_filename, retrain_encoder_filename])
@@ -428,6 +438,7 @@ def main(args):
         "Sensitive items (10)",
         "Sensitive items (20)",
         "KL(Retrained || Unlearned)",
+        "JS(Retrained || Unlearned)",
     ]
 
     df = pd.DataFrame(results, columns=columns)
@@ -442,6 +453,7 @@ def main(args):
         "Sensitive items (10)",
         "Sensitive items (20)",
         "KL(Retrained || Unlearned)",
+        "JS(Retrained || Unlearned)",
     ]
 
     df_avg = (
