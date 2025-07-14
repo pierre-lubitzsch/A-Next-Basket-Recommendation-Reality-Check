@@ -216,7 +216,13 @@ def main(args):
 
             cur_seed = int(cur_encoder_filename.split("seed_")[-1].split("_")[0])
             cur_category = sensitive_category
-            cur_requests = round(100 * users_to_take / len(cur_user_to_unlearning_items))
+            cur_requests = round(100 * users_to_take / len(user_to_unlearning_items))
+
+            # account for rounding errors
+            candidates = (25, 50, 75, 100)
+            cur_requests = min(candidates, key=lambda x: abs(x - cur_requests))
+
+
             cur_algorithm = "Baseline"
 
             if "unlearn_epoch" not in cur_encoder_filename:
@@ -285,7 +291,7 @@ def main(args):
                             if len(clean_unpadded_baskets) < 4:
                                 continue
                         
-                        target_variable = [[-1], clean_unpadded_baskets[1], [-1]]
+                        target_variable = [[-1], clean_unpadded_baskets[-1], [-1]]
                         input_variable = [[-1]] + clean_unpadded_baskets[:-1] + [[-1]]
 
 
@@ -362,11 +368,15 @@ def main(args):
                     # results.append([encoder_filename, retrain_encoder_filename, original_encoder_filename, param_distance_unlearned_retrained, param_distance_original_retrained, param_distance_unlearned_original, k, cur_encoder_filename, sensitive_item_in_output_basket_count])
                     performance_metrics_rnh.append((recall, ndcg, hitrate))
                     cur_sensitive_item_percentage = sensitive_item_in_output_basket_count / len(cur_user_to_unlearning_items)
-                    sensitive_item_percentages.append(f"{(100 * cur_sensitive_item_percentage):.2f}%")
+                    sensitive_item_percentages.append(100 * cur_sensitive_item_percentage)
 
 
                 cur_category = sensitive_category
-                cur_requests = round(100 * users_to_take / len(cur_user_to_unlearning_items))
+                cur_requests = round(100 * users_to_take / len(user_to_unlearning_items))
+
+                # account for rounding errorr
+                candidates = (25, 50, 75, 100)
+                cur_requests = min(candidates, key=lambda x: abs(x - cur_requests))
 
                 cur_algorithm = "Baseline"
                 if "unlearn_epoch" not in cur_encoder_filename:
