@@ -258,13 +258,13 @@ def scif_unlearn(
     )
 
     # clip the norm of inv_hvp to max_norm
+    tau = 1 / len(history_data)
     max_norm = 1
     delta_norm = tau * norm_list(inv_hvp)
     if delta_norm > max_norm:
         scale = max_norm / delta_norm
         inv_hvp = [x * scale for x in inv_hvp]
 
-    tau = 1 / len(history_data)
     with torch.no_grad():
         for p, d in zip(param_list, inv_hvp):
             p -= tau * d
