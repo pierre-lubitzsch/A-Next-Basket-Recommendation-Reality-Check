@@ -317,7 +317,7 @@ def cg_inv_hvp(
     p      = [ri.clone() for ri in r]                # p₀ = r₀
     rs_old = _dot_list(r, r).item()
 
-    for k in tqdm.tqdm(range(max_iter), disable=not LOCAL):
+    for k in tqdm.tqdm(range(max_iter), disable=True):#not LOCAL):
         # ---------------------------------------------------------------------
         # Compute  q = (H + λI)·p  using stochastic HVP on a mini‑batch
         # ---------------------------------------------------------------------
@@ -334,6 +334,10 @@ def cg_inv_hvp(
         q = [qi + damping * pi for qi, pi in zip(q, p)]
 
         # ---------------------------------------------------------------------
+        if _dot_list(p, q).item() == 0:
+            # p and q are orthogonal, we cannot proceed
+            print(f"[CG]  p and q are orthogonal at iteration {k}, stopping.")
+            break
         alpha = rs_old / _dot_list(p, q).item()
 
         # x_{k+1}  =  x_k + α p_k
