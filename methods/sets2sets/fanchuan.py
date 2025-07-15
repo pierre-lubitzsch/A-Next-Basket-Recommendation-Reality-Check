@@ -315,5 +315,5 @@ def unlearn_neurips_competition_iterative_contrastive(unlearning_user_ids, retai
         # print('%s (%d %d%%) %.6f' % (timeSince(start, total_iter / (n_iters * len(unlearning_user_ids))), total_iter,
         #                             total_iter / (n_iters * len(unlearning_user_ids)) * 100, print_loss_avg))
         # print_progress(start, total_iter, total_steps_expected, print_loss_avg)
-        print(f"average loss over {len(unlearning_user_ids)} sample{"s" if len(unlearning_user_ids) != 1 else ""}: {print_loss_avg}")
+        print(f"average loss over {len(unlearning_user_ids)} sample{'s' if len(unlearning_user_ids) != 1 else ''}: {print_loss_avg}")
         sys.stdout.flush()
