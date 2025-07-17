@@ -405,9 +405,6 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
 
 def unlearn_main():
     args = parse_args()
-    directory = './amodels/'
-    if not os.path.exists(directory):
-        os.makedirs(directory)
 
     dataset = args.dataset
     ind = args.ind
