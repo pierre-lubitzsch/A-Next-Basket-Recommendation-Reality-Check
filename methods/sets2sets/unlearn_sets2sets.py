@@ -122,6 +122,12 @@ def parse_args():
         default="./models",
         help="Directory where the models are saved"
     )
+    parser.add_argument(
+        "--max_norm",
+        type=str,
+        default=None,
+        help="Max norm for gradient clipping. If None, no clipping is applied."
+    )
     return parser.parse_args()
 
 

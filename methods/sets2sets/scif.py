@@ -200,6 +200,7 @@ def scif_unlearn(
     lissa_bs=16,
     retain_samples_used_for_update=128,
     train_pair_count=1024,
+    max_norm=None,
 ):
 
     def make_pair(u, sensitive_included):
@@ -259,11 +260,11 @@ def scif_unlearn(
 
     # clip the norm of inv_hvp to max_norm
     tau = 1 / len(history_data)
-    max_norm = 1
-    delta_norm = tau * norm_list(inv_hvp)
-    if delta_norm > max_norm:
-        scale = max_norm / delta_norm
-        inv_hvp = [x * scale for x in inv_hvp]
+    if max_norm is not None:
+        delta_norm = tau * norm_list(inv_hvp)
+        if delta_norm > max_norm:
+            scale = max_norm / delta_norm
+            inv_hvp = [x * scale for x in inv_hvp]
 
     with torch.no_grad():
         for p, d in zip(param_list, inv_hvp):
