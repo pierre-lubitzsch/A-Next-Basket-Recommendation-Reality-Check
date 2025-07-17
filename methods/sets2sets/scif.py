@@ -28,7 +28,7 @@ def _loss_forward(
     codes_inverse_freq, criterion, output_size, max_len
 ):
     """
-    Exact same computation as `train()` – *minus* optim.step() and *minus*
+    Exact same computation as `train()` - *minus* optim.step() and *minus*
     gradient zeroing.  Returns the scalar loss so we can auto-diff it.
     """
     use_cuda = next(encoder.parameters()).is_cuda
@@ -282,14 +282,14 @@ def scif_unlearn(
 ###############################################################################
 
 def _dot_list(a: Sequence[torch.Tensor], b: Sequence[torch.Tensor]) -> torch.Tensor:
-    """⟨a,b⟩ for lists of tensors (returned as a scalar tensor on the same device)."""
+    """dot product for lists of tensors (returned as a scalar tensor on the same device)."""
     return sum((x * y).sum() for x, y in zip(a, b))
 
 
 def _add_scaled(x: Sequence[torch.Tensor],
                 y: Sequence[torch.Tensor],
                 alpha: float) -> List[torch.Tensor]:
-    """x + α·y (list form, no gradients kept)."""
+    """x + alpha y (list form, no gradients kept)."""
     return [xi + alpha * yi for xi, yi in zip(x, y)]
 
 
@@ -297,30 +297,30 @@ def cg_inv_hvp(
     encoder, decoder,                             # models
     train_data: List[Tuple],                      # data used to build H
     v_list: Sequence[torch.Tensor],               # right‑hand side ‘v’
-    param_list: Sequence[torch.Tensor],           # θ we differentiate w.r.t.
+    param_list: Sequence[torch.Tensor],           # theta we differentiate w.r.t.
     codes_inverse_freq, criterion, output_size, max_len,
-    damping: float = 0.01,                        # λ – Tikhonov damping
+    damping: float = 0.01,                        # lambda – Tikhonov damping
     bs: int = 16,                                 # mini‑batch size for H·p
     max_iter: int | None = None,
     tol: float = 1e-5,
     LOCAL: bool = False,
 ):
     """
-    Solve  (H + λI) x = v  for x with conjugate gradients.
+    Solve  (H + lambda I) x = v  for x with conjugate gradients.
     Returns: (x, diverged_flag)
     """
     # Total number of iterations: one pass over the data by default
     max_iter = max_iter or math.ceil(len(train_data) / bs)
 
     # --- initialisation ------------------------------------------------------
-    x      = [torch.zeros_like(v) for v in v_list]   # x₀
-    r      = [v.clone() for v in v_list]             # r₀ = v − Hx₀  (Hx₀ = 0)
-    p      = [ri.clone() for ri in r]                # p₀ = r₀
+    x      = [torch.zeros_like(v) for v in v_list]   # x_theta
+    r      = [v.clone() for v in v_list]             # r_theta = v − H x_theta  (H x_theta = 0)
+    p      = [ri.clone() for ri in r]                # p_theta = r_theta
     rs_old = _dot_list(r, r).item()
 
-    for k in tqdm.tqdm(range(max_iter), disable=True):#not LOCAL):
+    for k in tqdm.tqdm(range(max_iter), disable=not LOCAL):
         # ---------------------------------------------------------------------
-        # Compute  q = (H + λI)·p  using stochastic HVP on a mini‑batch
+        # Compute  q = (H + lambda I) p  using stochastic HVP on a mini‑batch
         # ---------------------------------------------------------------------
         idx   = [random.randrange(len(train_data)) for _ in range(bs)]
         batch = [train_data[i] for i in idx]
@@ -331,7 +331,7 @@ def cg_inv_hvp(
             codes_inverse_freq, criterion, output_size, max_len,
             average=True,
         )
-        # add λI term
+        # add lambda I term
         q = [qi + damping * pi for qi, pi in zip(q, p)]
 
         # ---------------------------------------------------------------------
@@ -341,10 +341,10 @@ def cg_inv_hvp(
             break
         alpha = rs_old / _dot_list(p, q).item()
 
-        # x_{k+1}  =  x_k + α p_k
+        # x_{k+1}  =  x_k + alpha p_k
         x = _add_scaled(x, p, alpha)
 
-        # r_{k+1}  =  r_k − α q
+        # r_{k+1}  =  r_k − alpha q
         r = _add_scaled(r, q, -alpha)
 
         rs_new = _dot_list(r, r).item()
@@ -353,7 +353,7 @@ def cg_inv_hvp(
 
         beta = rs_new / rs_old
 
-        # p_{k+1}  =  r_{k+1} + β p_k
+        # p_{k+1}  =  r_{k+1} + beta p_k
         p = [ri + beta * pi for ri, pi in zip(r, p)]
         rs_old = rs_new
 

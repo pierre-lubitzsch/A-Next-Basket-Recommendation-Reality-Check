@@ -356,6 +356,7 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
                 retain_pairs=retain_pairs,
                 train_pair_count=args.lissa_train_pair_count_scif,
                 retain_samples_used_for_update=args.retain_samples_used_for_update,
+                max_norm=args.max_norm,
             )
         elif unlearning_algorithm == "kookmin":
             kookmin.unlearn_by_reinit_and_finetune(

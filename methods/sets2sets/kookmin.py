@@ -175,55 +175,6 @@ def unlearn_by_reinit_and_finetune(
 
     signed_grads = [gr - gf for gr, gf in zip(grads_retain, grads_forget)]
 
-    # scores = torch.tensor([_mean_abs(g).item() for g in signed_grads],
-    #                       device=device)
-    # k = max(1, int(len(scores) * kookmin_init_rate))
-    # thresh = scores.kthvalue(k).values.item()
-
-    # def _reinit_tensor(tensor: torch.Tensor, module: nn.Module, name: str):
-    #     with torch.no_grad():
-    #         if isinstance(module, nn.Conv2d):
-    #             init.kaiming_normal_(tensor)
-    #         elif isinstance(module, nn.Linear):
-    #             init.kaiming_uniform_(tensor, a=math.sqrt(5))
-    #         elif isinstance(module, nn.Embedding):
-    #             init.normal_(tensor, 0, 0.02)
-    #         elif isinstance(module, (nn.GRU, nn.LSTM, nn.RNN)):
-    #             # weight_ih_l0, weight_hh_l0, bias_ih_l0, bias_hh_l0, ...
-    #             if "weight" in name:
-    #                 init.xavier_uniform_(tensor)
-    #             else:  # bias
-    #                 tensor.zero_()
-    #         elif isinstance(module, nn.BatchNorm2d):
-    #             if "weight" in name:
-    #                 tensor.fill_(1.)
-    #             else:
-    #                 tensor.zero_()
-    #         else:
-    #             init.normal_(tensor, 0, 0.02)
-
-    # reinit_params, kept_params = [], []
-
-    # print("picking parameters to re-initialize")
-
-    # for (net_name, net) in [("encoder", encoder), ("decoder", decoder)]:
-    #     for n, p in net.named_parameters():
-    #         if not p.requires_grad or p.grad is None:
-    #             continue
-
-    #         g_idx = param_index[id(p)]       # position in the signed_grad list
-    #         if _mean_abs(signed_grads[g_idx]) > thresh:
-    #             kept_params.append(p)        # keep, lr will be 0.1·base
-    #             continue
-
-    #         module_name = n.split('.')[0]
-    #         module = dict(net.named_modules())[module_name]
-    #         _reinit_tensor(p, module, n)               
-    #         reinit_params.append(p)          # full learning-rate here
-
-    # _reset_adam_state(encoder_optimizer, reinit_params)
-    # _reset_adam_state(decoder_optimizer, reinit_params)
-
     all_scores = torch.cat([g.abs().reshape(-1) for g in signed_grads])
     total = all_scores.numel()
     k = max(1, int(total * kookmin_init_rate))
