@@ -181,7 +181,7 @@ def _find_trained_models(args, model_version, seed):
         )
         pattern = f"unlearn_encoder_{model_version}_model_best_unlearn_epoch"
         print(pattern)
-        for fname in sorted(os.listdir("./{args.model_dir}")):
+        for fname in sorted(os.listdir(f"./{args.model_dir}")):
             if fname.startswith(pattern) and fname.endswith(f"_seed_{seed}{unlearn_tag}.pt"):
                 epoch = fname.split("unlearn_epoch")[1].split("_")[0]
                 enc = f"./{args.model_dir}/{fname}"
