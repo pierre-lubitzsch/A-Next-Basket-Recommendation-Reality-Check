@@ -718,11 +718,6 @@ def set_seed(seed: int) -> None:
 
 
 def main(argv):
-
-    directory = './amodels/'
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-
     dataset = argv[1]
     ind = argv[2]
     history_file = '../../jsondata/'+dataset+'_history.json'
