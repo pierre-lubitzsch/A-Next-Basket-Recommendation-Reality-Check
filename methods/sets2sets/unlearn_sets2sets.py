@@ -568,9 +568,11 @@ def unlearn_main():
         device = torch.device("cuda" if use_cuda else "cpu")
 
         for cur_encoder_filename, cur_decoder_filename in paired:
+            if "decoder_" in cur_encoder_filename:
+                continue
             
             if compare_to_retrain:
-                retrain_encoder_filename, retrain_decoder_filename = unlearn_model_to_retrained_model(cur_encoder_filename)
+                retrain_encoder_filename, retrain_decoder_filename, _, _ = unlearn_model_to_retrained_model(cur_encoder_filename)
 
                 retrain_encoder_path, retrain_decoder_path = f"{args.model_dir}/{retrain_encoder_filename}", f"{args.model_dir}/{retrain_decoder_filename}"
 
@@ -579,8 +581,8 @@ def unlearn_main():
                 retrained_encoder.eval()
                 retrained_decoder.eval()
 
-            cur_encoder_filepath = f"{directory}/{cur_encoder_filename}"
-            cur_decoder_filepath = f"{directory}/{cur_decoder_filename}"
+            cur_encoder_filepath = cur_encoder_filename
+            cur_decoder_filepath = cur_decoder_filename
 
             if not os.path.exists(cur_encoder_filepath) or not os.path.exists(cur_decoder_filepath):
                 continue
