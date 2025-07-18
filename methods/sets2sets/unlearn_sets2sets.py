@@ -124,7 +124,7 @@ def parse_args():
     )
     parser.add_argument(
         "--max_norm",
-        type=str,
+        type=float,
         default=None,
         help="Max norm for gradient clipping. If None, no clipping is applied."
     )
