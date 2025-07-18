@@ -408,6 +408,42 @@ def unlearnIters(data_history, data_future, output_size, encoder, decoder, model
     
 
 
+def unlearn_model_to_retrained_model(unlearn_filename):
+    ds = "Instacart"
+    seed = int(unlearn_filename.split("_seed_")[-1].split("_")[0])
+    frac = float(unlearn_filename.split("_unlearning_fraction_")[-1].split("_")[0])
+    if "unlearn_epoch" not in unlearn_filename:
+        return None, None, None, None
+    unlearn_epochs = int(unlearn_filename.split("unlearn_epoch")[-1].split("_")[0])
+    if unlearn_epochs < 10:
+        return None, None, None, None
+    if "sensitive" in unlearn_filename:
+        category = unlearn_filename.split("sensitive_category_")[-1].split("_")[0]
+    
+    with open(f"../../unlearning_data/dataset_{ds.lower()}_seed_{seed}_method_sensitive_unlearning_fraction_{frac}.pkl", "rb") as f:
+        unlearn_users_to_items = pickle.load(f)
+        if "sensitive" in unlearn_filename:
+            unlearn_users_to_items = unlearn_users_to_items[category]
+
+
+    n = len(unlearn_users_to_items)
+    checkpoint_every = math.ceil(n / 4)
+    checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 5 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 5 and i == n - 1))]
+    if len(checkpoint_idxs) == 5:
+        checkpoint_idxs = checkpoint_idxs[:4] + [checkpoint_idxs[-1]]
+
+    retrain_idx_to_match = checkpoint_idxs.index(unlearn_epochs)
+    if retrain_idx_to_match == -1:
+        return None, None, None, None
+    
+    encoder_retrain_filename = f"encoder_instacart0_model_best_seed_{seed}_sensitive_category_{category}_unlearning_fraction_{frac}_retrain_checkpoint_idx_to_match_{retrain_idx_to_match}.pt"
+    decoder_retrain_filename = f"decoder_instacart0_model_best_seed_{seed}_sensitive_category_{category}_unlearning_fraction_{frac}_retrain_checkpoint_idx_to_match_{retrain_idx_to_match}.pt"
+    
+    original_encoder_filename = f"encoder_instacart0_model_best_seed_{seed}.pt"
+    original_decoder_filename = f"decoder_instacart0_model_best_seed_{seed}.pt"
+    
+    return encoder_retrain_filename, decoder_retrain_filename, original_encoder_filename, original_decoder_filename
+
 
 
 def unlearn_main():
@@ -586,6 +622,8 @@ def unlearn_main():
 
             if not os.path.exists(cur_encoder_filepath) or not os.path.exists(cur_decoder_filepath):
                 continue
+                
+            print(f"evaluation for: {cur_encoder_filename}")
 
             encoder = torch.load(cur_encoder_filepath, map_location=device, weights_only=False)
             decoder = torch.load(cur_decoder_filepath, map_location=device, weights_only=False)
@@ -753,50 +791,14 @@ def unlearn_main():
                     cur_sensitive_item_percentage = sensitive_item_in_output_basket_count / len(cur_user_to_unlearning_items)
                     sensitive_item_percentages.append(100 * cur_sensitive_item_percentage)
             
-                    print(f"Sensitive items@{k}: {sensitive_item_percentages[k_idx]:.2f}%")
-                    print(f"Recall@{k}: {recall:.4f}, NDCG@{k}: {ndcg:.4f}, HR@{k}: {hitrate:.4f}")
+                    print(f"Sensitive items@{k}: {sensitive_item_percentages[k_idx]:.2f}%\n")
+                    print(f"Recall@{k}: {recall:.4f}\nNDCG@{k}: {ndcg:.4f}\nPHR@{k}: {hitrate:.4f}\n")
 
                     if compare_to_retrain and k_idx == 0:
-                        print(f"KL-divergence: {np.mean(kl_div_list):.4f}, JS-divergence: {np.mean(js_div_list):.4f}")
+                        print(f"KL-divergence: {np.mean(kl_div_list):.4f}\nJS-divergence: {np.mean(js_div_list):.4f}\n\n")
+            
+            print("\n\n\n")
 
-
-
-
-def unlearn_model_to_retrained_model(unlearn_filename):
-    ds = "Instacart"
-    seed = int(unlearn_filename.split("_seed_")[-1].split("_")[0])
-    frac = float(unlearn_filename.split("_unlearning_fraction_")[-1].split("_")[0])
-    if "unlearn_epoch" not in unlearn_filename:
-        return None, None, None, None
-    unlearn_epochs = int(unlearn_filename.split("unlearn_epoch")[-1].split("_")[0])
-    if unlearn_epochs < 10:
-        return None, None, None, None
-    if "sensitive" in unlearn_filename:
-        category = unlearn_filename.split("sensitive_category_")[-1].split("_")[0]
-    
-    with open(f"../../unlearning_data/dataset_{ds.lower()}_seed_{seed}_method_sensitive_unlearning_fraction_{frac}.pkl", "rb") as f:
-        unlearn_users_to_items = pickle.load(f)
-        if "sensitive" in unlearn_filename:
-            unlearn_users_to_items = unlearn_users_to_items[category]
-
-
-    n = len(unlearn_users_to_items)
-    checkpoint_every = math.ceil(n / 4)
-    checkpoint_idxs = [i for i in range(n) if i > 0 and ((i <= 3 * n // 4 + 5 and i % checkpoint_every == 0) or (i >= 3 * n // 4 + 5 and i == n - 1))]
-    if len(checkpoint_idxs) == 5:
-        checkpoint_idxs = checkpoint_idxs[:4] + [checkpoint_idxs[-1]]
-
-    retrain_idx_to_match = checkpoint_idxs.index(unlearn_epochs)
-    if retrain_idx_to_match == -1:
-        return None, None, None, None
-    
-    encoder_retrain_filename = f"encoder_instacart0_model_best_seed_{seed}_sensitive_category_{category}_unlearning_fraction_{frac}_retrain_checkpoint_idx_to_match_{retrain_idx_to_match}.pt"
-    decoder_retrain_filename = f"decoder_instacart0_model_best_seed_{seed}_sensitive_category_{category}_unlearning_fraction_{frac}_retrain_checkpoint_idx_to_match_{retrain_idx_to_match}.pt"
-    
-    original_encoder_filename = f"encoder_instacart0_model_best_seed_{seed}.pt"
-    original_decoder_filename = f"decoder_instacart0_model_best_seed_{seed}.pt"
-    
-    return encoder_retrain_filename, decoder_retrain_filename, original_encoder_filename, original_decoder_filename
 
 
 
